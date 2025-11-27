@@ -89,7 +89,9 @@ export default function Profile() {
 
   const [editForm, setEditForm] = useState({ username: '', bio: '', avatarFile: null, avatarPreview: null })
   const [saving, setSaving] = useState(false)
-  const fileInputRef = useRef(null)
+  
+  // Ref tidak lagi digunakan untuk trigger click, tapi input langsung
+  // const fileInputRef = useRef(null) 
 
   const router = useRouter()
 
@@ -187,11 +189,11 @@ export default function Profile() {
     setStats({ dominant, total: posts.length, streak: currentStreak, calendar, advice: selectedAdvice })
   }
 
-  // --- LOGIKA EDIT PROFILE (FIXED FOR MOBILE) ---
+  // --- LOGIKA EDIT PROFILE (FIXED FOR MOBILE WITH FILE READER) ---
   const handleAvatarChange = (e) => {
     const file = e.target.files[0]
     
-    // Reset value agar bisa pilih file yang sama jika perlu
+    // Reset input value agar event onChange tetap trigger walau file sama
     e.target.value = ''
 
     if (file) {
@@ -201,7 +203,7 @@ export default function Profile() {
         return
       }
 
-      // 2. Pakai FileReader (Lebih stabil di HP)
+      // 2. Pakai FileReader untuk Preview (Lebih stabil di Mobile Browser)
       const reader = new FileReader()
       
       reader.onloadend = () => {
@@ -318,26 +320,30 @@ export default function Profile() {
                 <h3 className="text-xl font-bold mb-6 text-center">Edit Profile</h3>
                 
                 <div className="space-y-6">
+                    
+                    {/* GHOST INPUT UPLOAD (FIXED FOR MOBILE) */}
                     <div className="flex flex-col items-center gap-3">
-                        <div 
-                            onClick={() => fileInputRef.current.click()}
-                            className="w-24 h-24 rounded-full overflow-hidden border-2 border-dashed border-gray-600 cursor-pointer hover:border-white transition relative group"
-                        >
+                        <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-dashed border-gray-600 group">
+                            
+                            {/* Layer Gambar */}
                             {editForm.avatarPreview ? (
-                                <img src={editForm.avatarPreview} className="w-full h-full object-cover" />
+                                <img src={editForm.avatarPreview} className="w-full h-full object-cover pointer-events-none" />
                             ) : (
-                                <div className="w-full h-full bg-gray-800 flex items-center justify-center text-2xl">📸</div>
+                                <div className="w-full h-full bg-gray-800 flex items-center justify-center text-2xl pointer-events-none">📸</div>
                             )}
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold">CHANGE</div>
+                            
+                            {/* Layer Teks */}
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold pointer-events-none">CHANGE</div>
+
+                            {/* Layer INPUT TRANSPARAN (Ghost) */}
+                            <input 
+                                type="file" 
+                                onChange={handleAvatarChange} 
+                                accept="image/png, image/jpeg, image/jpg, image/webp" 
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
+                            />
                         </div>
-                        {/* INPUT FILE DENGAN ACCEPT */}
-                        <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            hidden 
-                            onChange={handleAvatarChange} 
-                            accept="image/png, image/jpeg, image/jpg, image/webp" 
-                        />
+                        <span className="text-[10px] text-gray-500">Tap image to change</span>
                     </div>
 
                     <div className="space-y-1">
