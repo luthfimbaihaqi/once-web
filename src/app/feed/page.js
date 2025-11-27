@@ -28,6 +28,9 @@ export default function Feed() {
   const [hasPostedToday, setHasPostedToday] = useState(false)
   const [myDailyPost, setMyDailyPost] = useState(null)
   
+  // STATE BARU: Counter Notifikasi
+  const [unreadCount, setUnreadCount] = useState(0)
+
   const [showReportModal, setShowReportModal] = useState(false)
   const [showMyDetail, setShowMyDetail] = useState(false)
 
@@ -44,6 +47,14 @@ export default function Feed() {
       
       const { data: profile } = await supabase.from('profiles').select('avatar_url').eq('id', user.id).single()
       if (profile) setUserAvatar(profile.avatar_url)
+
+      // Cek Unread Notification
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+      setUnreadCount(count || 0)
 
       await checkMyDailyPost(user.id) 
       await loadFeedLogic(user.id) 
@@ -149,6 +160,7 @@ export default function Feed() {
     return postReactions?.filter(r => r.reaction_value === type).length || 0
   }
 
+  // --- KOMPONEN TOMBOL UPLOAD / MINI CARD ---
   const UploadSection = () => (
     <div className="mb-8 w-full max-w-xs flex justify-center z-50">
       {!myDailyPost ? (
@@ -187,6 +199,7 @@ export default function Feed() {
     </div>
   )
 
+  // --- KOMPONEN BACKGROUND ---
   const AmbientBackground = () => (
     <>
       <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
@@ -194,7 +207,7 @@ export default function Feed() {
     </>
   )
 
-  // --- KOMPONEN EMPTY STATE (Update Teks) ---
+  // --- KOMPONEN EMPTY STATE ---
   const EmptyState = ({ message, subMessage }) => (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
         <AmbientBackground />
@@ -229,7 +242,7 @@ export default function Feed() {
   )
 
 
-  if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Checking Frequency...</div>
+  if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Initializing Feed...</div>
 
   // RENDER MODAL DETAIL
   const renderMyDetailModal = () => {
@@ -271,14 +284,14 @@ export default function Feed() {
         <>
             {renderMyDetailModal()}
             <EmptyState 
-                message="Cycle Complete" 
-                subMessage="You have reached the daily limit of 10 truths. Return to your reality."
+                message="All Caught Up" 
+                subMessage="The feed is quiet. Time to enjoy the real world."
             />
         </>
     )
   }
 
-  // KONDISI 2: STOK HABIS (Updated Text Here!)
+  // KONDISI 2: STOK HABIS
   if (currentCardIndex >= posts.length) {
     return (
         <>
@@ -313,8 +326,27 @@ export default function Feed() {
           </div>
       )}
 
+      {/* HEADER UPDATE: DENGAN NOTIFIKASI */}
       <nav className="fixed top-0 w-full px-6 py-4 flex justify-between items-center z-50 mix-blend-difference">
-        <h1 className="text-xl font-black tracking-tighter">ONCE.</h1>
+        <div className="flex items-center gap-4">
+            {/* TOMBOL LONCENG NOTIFIKASI */}
+            <button 
+                onClick={() => router.push('/notifications')}
+                className="relative group"
+            >
+                <span className="text-xl filter drop-shadow-lg group-hover:scale-110 transition">🔔</span>
+                {/* Dot Merah */}
+                {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                    </span>
+                )}
+            </button>
+
+            <h1 className="text-xl font-black tracking-tighter">ONCE.</h1>
+        </div>
+
         <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-gray-500">{viewCount + 1} / {DAILY_VIEW_LIMIT}</span>
             <button onClick={() => router.push('/profile')} className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold border border-white/20 overflow-hidden">
