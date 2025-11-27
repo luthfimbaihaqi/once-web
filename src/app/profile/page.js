@@ -90,9 +90,6 @@ export default function Profile() {
   const [editForm, setEditForm] = useState({ username: '', bio: '', avatarFile: null, avatarPreview: null })
   const [saving, setSaving] = useState(false)
   
-  // Ref tidak lagi digunakan untuk trigger click, tapi input langsung
-  // const fileInputRef = useRef(null) 
-
   const router = useRouter()
 
   useEffect(() => {
@@ -119,7 +116,7 @@ export default function Profile() {
     if (data) {
         setProfile(data)
         setEditForm({ 
-            username: data.username, 
+            username: data.username || '', // Safety check kalau null
             bio: data.bio || '', 
             avatarFile: null, 
             avatarPreview: data.avatar_url 
@@ -189,23 +186,18 @@ export default function Profile() {
     setStats({ dominant, total: posts.length, streak: currentStreak, calendar, advice: selectedAdvice })
   }
 
-  // --- LOGIKA EDIT PROFILE (FIXED FOR MOBILE WITH FILE READER) ---
+  // --- LOGIKA EDIT PROFILE (SAFE MODE) ---
   const handleAvatarChange = (e) => {
     const file = e.target.files[0]
-    
-    // Reset input value agar event onChange tetap trigger walau file sama
     e.target.value = ''
 
     if (file) {
-      // 1. Validasi Ukuran (Max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert("File is too big! Please choose an image under 5MB.")
         return
       }
 
-      // 2. Pakai FileReader untuk Preview (Lebih stabil di Mobile Browser)
       const reader = new FileReader()
-      
       reader.onloadend = () => {
         setEditForm(prev => ({ 
             ...prev, 
@@ -213,7 +205,6 @@ export default function Profile() {
             avatarPreview: reader.result 
         }))
       }
-
       reader.readAsDataURL(file)
     }
   }
@@ -228,7 +219,9 @@ export default function Profile() {
             updated_at: new Date(),
         }
 
-        if (editForm.username !== profile.username) {
+        // FIX: Hanya jalankan validasi username jika 'profile' ada dan username berubah
+        // Jika profile null (user baru/error), anggap boleh update
+        if (profile && editForm.username !== profile.username) {
             const lastChanged = profile.username_last_changed ? new Date(profile.username_last_changed) : null
             const now = new Date()
             
@@ -321,21 +314,18 @@ export default function Profile() {
                 
                 <div className="space-y-6">
                     
-                    {/* GHOST INPUT UPLOAD (FIXED FOR MOBILE) */}
+                    {/* GHOST INPUT UPLOAD */}
                     <div className="flex flex-col items-center gap-3">
                         <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-dashed border-gray-600 group">
                             
-                            {/* Layer Gambar */}
                             {editForm.avatarPreview ? (
                                 <img src={editForm.avatarPreview} className="w-full h-full object-cover pointer-events-none" />
                             ) : (
                                 <div className="w-full h-full bg-gray-800 flex items-center justify-center text-2xl pointer-events-none">📸</div>
                             )}
                             
-                            {/* Layer Teks */}
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold pointer-events-none">CHANGE</div>
 
-                            {/* Layer INPUT TRANSPARAN (Ghost) */}
                             <input 
                                 type="file" 
                                 onChange={handleAvatarChange} 
@@ -440,17 +430,20 @@ export default function Profile() {
         <section className="flex flex-col items-center pt-4 pb-8 relative group">
           <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-1 mb-4">
             <div className="w-full h-full bg-black rounded-full flex items-center justify-center border-4 border-transparent overflow-hidden">
-               {profile?.avatar_url ? (
-                   <img src={profile.avatar_url} className="w-full h-full object-cover" />
-               ) : (
-                   <span className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-indigo-400 to-pink-400">
-                     {user.email[0].toUpperCase()}
+               {/* Gunakan avatar dari profile, atau editForm (preview), atau inisial */}
+               {(profile?.avatar_url || user?.email) ? (
+                   <img src={profile?.avatar_url} className="w-full h-full object-cover" onError={(e) => e.target.style.display='none'} />
+               ) : null}
+               
+               {!profile?.avatar_url && (
+                   <span className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-indigo-400 to-pink-400 absolute">
+                     {user?.email?.[0].toUpperCase()}
                    </span>
                )}
             </div>
           </div>
           
-          <h2 className="text-xl font-bold">{profile?.username || user.email.split('@')[0]}</h2>
+          <h2 className="text-xl font-bold">{profile?.username || user?.email?.split('@')[0]}</h2>
           
           {profile?.bio && (
               <p className="text-sm text-gray-400 mt-2 max-w-[200px] text-center italic">"{profile.bio}"</p>
