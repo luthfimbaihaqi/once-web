@@ -23,14 +23,56 @@ const MOOD_STYLES_BADGE = {
   'FlatFace': 'bg-slate-500/10 text-slate-400 border-slate-500/20',
 }
 
-const MOOD_ADVICE = {
-  'Happy': "Keep shining! Your energy is contagious today.",
-  'Sad': "It's okay not to be okay. Take a deep breath.",
-  'InLove': "Love is in the air! Enjoy this beautiful feeling.",
-  'Angry': "Channel that fire into something creative.",
-  'Gloomy': "Even the darkest clouds have a silver lining.",
-  'Boring': "Maybe it's time to try something new?",
-  'FlatFace': "Just flowing with the day. Stay chill.",
+const MOOD_ADVICE_POOL = {
+  'Happy': [
+    "Keep shining! Your energy is contagious today.",
+    "Mission: Share this joy with a stranger.",
+    "Happiness looks gorgeous on you.",
+    "Save this feeling. Bottle it up for a rainy day.",
+    "You are the sun in someone else's sky today."
+  ],
+  'Sad': [
+    "It's okay not to be okay. Take a deep breath.",
+    "Mission: Listen to your favorite slow song.",
+    "Tears are just words the heart can't say.",
+    "Be gentle with yourself. You're healing.",
+    "This too shall pass. Just breathe."
+  ],
+  'InLove': [
+    "Love is in the air! Enjoy this beautiful feeling.",
+    "Mission: Send a text to someone you appreciate.",
+    "The world looks brighter through your eyes today.",
+    "Hold onto this warmth. It's rare.",
+    "Heart full, vibes high. Enjoy the flutter."
+  ],
+  'Angry': [
+    "Channel that fire into something creative.",
+    "Mission: Put your phone down and take a walk.",
+    "Don't let the noise disturb your inner peace.",
+    "Anger is an energy. Use it wisely, don't burn out.",
+    "Deep breath in. Deep breath out. Let it go."
+  ],
+  'Gloomy': [
+    "Even the darkest clouds have a silver lining.",
+    "Mission: Go outside and look at the sky.",
+    "It's a slow day, and that is perfectly fine.",
+    "Rest if you must, but don't you quit.",
+    "Stars only shine when it's dark enough."
+  ],
+  'Boring': [
+    "Maybe it's time to try something new?",
+    "Mission: Read a book or watch a documentary.",
+    "Boredom is the birthplace of creativity.",
+    "Do one thing that scares you today.",
+    "Routine is safe, but adventure is waiting."
+  ],
+  'FlatFace': [
+    "Just flowing with the day. Stay chill.",
+    "Mission: Drink a glass of water. Hydrate.",
+    "Neutral is a powerful place to be.",
+    "No drama, no stress. Just being.",
+    "Peace is the new luxury."
+  ],
 }
 
 export default function Profile() {
@@ -38,14 +80,13 @@ export default function Profile() {
   const [profile, setProfile] = useState(null) 
   const [myPosts, setMyPosts] = useState([])
   const [loading, setLoading] = useState(true)
+  
   const [stats, setStats] = useState({ dominant: null, total: 0, streak: 0, calendar: [], advice: '' })
   
-  // MODAL STATES
   const [selectedPost, setSelectedPost] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
 
-  // EDIT FORM STATES
   const [editForm, setEditForm] = useState({ username: '', bio: '', avatarFile: null, avatarPreview: null })
   const [saving, setSaving] = useState(false)
   const fileInputRef = useRef(null)
@@ -66,7 +107,6 @@ export default function Profile() {
     getData()
   }, [router])
 
-  // --- 1. FETCH PROFILE DATA ---
   const fetchProfileData = async (userId) => {
     const { data } = await supabase
       .from('profiles')
@@ -109,7 +149,11 @@ export default function Profile() {
     })
 
     let selectedAdvice = ""
-    if (dominant) selectedAdvice = MOOD_ADVICE[dominant] 
+    if (dominant) {
+        const pool = MOOD_ADVICE_POOL[dominant]
+        const randomIndex = Math.floor(Math.random() * pool.length)
+        selectedAdvice = pool[randomIndex]
+    }
 
     let currentStreak = 0
     const today = new Date().setHours(0,0,0,0)
@@ -143,18 +187,29 @@ export default function Profile() {
     setStats({ dominant, total: posts.length, streak: currentStreak, calendar, advice: selectedAdvice })
   }
 
-  // --- LOGIKA EDIT PROFILE (PERBAIKAN UTAMA DI SINI) ---
+  // --- LOGIKA EDIT PROFILE (FIXED UNTUK MOBILE) ---
   const handleAvatarChange = (e) => {
     const file = e.target.files[0]
+    
     if (file) {
-        setEditForm(prev => ({ ...prev, avatarFile: file, avatarPreview: URL.createObjectURL(file) }))
+      // 1. Validasi Ukuran (Max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert("File is too big! Please choose an image under 5MB.")
+        return
+      }
+
+      // 2. Set State Preview
+      setEditForm(prev => ({ 
+        ...prev, 
+        avatarFile: file, 
+        avatarPreview: URL.createObjectURL(file) 
+      }))
     }
   }
 
   const handleSaveProfile = async () => {
     setSaving(true)
     try {
-        // PERBAIKAN: Username selalu dimasukkan ke updates agar tidak NULL
         const updates = {
             id: user.id,
             username: editForm.username, 
@@ -162,7 +217,6 @@ export default function Profile() {
             updated_at: new Date(),
         }
 
-        // 1. Cek Logic Ganti Username (30 Hari)
         if (editForm.username !== profile.username) {
             const lastChanged = profile.username_last_changed ? new Date(profile.username_last_changed) : null
             const now = new Date()
@@ -178,7 +232,6 @@ export default function Profile() {
                 }
             }
 
-            // Cek Ketersediaan Username (Unik)
             const { data: existing } = await supabase
                 .from('profiles')
                 .select('username')
@@ -192,11 +245,9 @@ export default function Profile() {
                 return
             }
 
-            // Kalau lolos, catat waktu ganti username
             updates.username_last_changed = new Date()
         }
 
-        // 2. Upload Avatar Baru (Jika ada)
         if (editForm.avatarFile) {
             const fileName = `avatar_${user.id}_${Date.now()}.jpg`
             const { error: uploadError } = await supabase.storage
@@ -209,11 +260,9 @@ export default function Profile() {
             updates.avatar_url = publicUrlData.publicUrl
         }
 
-        // 3. Simpan ke Database
         const { error } = await supabase.from('profiles').upsert(updates)
         if (error) throw error
 
-        // 4. Refresh Data
         await fetchProfileData(user.id)
         setIsEditing(false)
         alert('Profile updated successfully!')
@@ -272,7 +321,14 @@ export default function Profile() {
                             )}
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold">CHANGE</div>
                         </div>
-                        <input type="file" ref={fileInputRef} hidden onChange={handleAvatarChange} accept="image/*" />
+                        {/* INPUT FIXED FOR MOBILE: ACCEPT SPECIFIC FORMAT */}
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            hidden 
+                            onChange={handleAvatarChange} 
+                            accept="image/png, image/jpeg, image/jpg, image/webp" 
+                        />
                     </div>
 
                     <div className="space-y-1">
