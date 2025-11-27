@@ -217,12 +217,12 @@ export default function Feed() {
             <UploadSection />
 
             <div className="w-16 h-16 rounded-full border-2 border-dashed border-gray-700 animate-spin-slow mb-6"></div>
-            <p className="text-gray-500 text-sm tracking-widest uppercase">No more signals nearby.</p>
+            <p className="text-gray-500 text-sm tracking-widest uppercase">No more posts nearby.</p>
             <p className="text-gray-600 text-xs mt-2 mb-8">Try again later.</p>
             
             <div className="flex flex-col gap-4 w-full max-w-xs">
                 <button onClick={() => router.push('/profile')} className="w-full px-6 py-3 rounded-full bg-white/10 border border-white/10 text-white font-bold text-xs tracking-widest hover:bg-white hover:text-black transition-all">OPEN PROFILE</button>
-                <button onClick={() => window.location.reload()} className="text-gray-500 hover:text-white underline text-xs transition-colors">Refresh Signal</button>
+                <button onClick={() => window.location.reload()} className="text-gray-500 hover:text-white underline text-xs transition-colors">Refresh Posts</button>
             </div>
         </div>
     )
