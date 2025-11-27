@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
-// GAYA NEON GLOW UNTUK BADGE
 const MOOD_STYLES = {
   'Happy': 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.3)]',
   'Sad': 'bg-blue-500/10 text-blue-500 border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]',
@@ -19,19 +18,13 @@ const DAILY_VIEW_LIMIT = 10
 export default function Feed() {
   const [user, setUser] = useState(null)
   const [userAvatar, setUserAvatar] = useState(null) 
-  
   const [posts, setPosts] = useState([]) 
   const [currentCardIndex, setCurrentCardIndex] = useState(0) 
   const [viewCount, setViewCount] = useState(0) 
-  
   const [loading, setLoading] = useState(true)
-  
-  // STATE DATA POSTINGAN SAYA
   const [myDailyPost, setMyDailyPost] = useState(null)
-  
-  // STATE MODAL
   const [showReportModal, setShowReportModal] = useState(false)
-  const [showMyDetail, setShowMyDetail] = useState(false) // State untuk Modal Detail Post Saya
+  const [showMyDetail, setShowMyDetail] = useState(false)
 
   const router = useRouter()
 
@@ -43,21 +36,18 @@ export default function Feed() {
         return
       }
       setUser(user)
-      
       const { data: profile } = await supabase.from('profiles').select('avatar_url').eq('id', user.id).single()
       if (profile) setUserAvatar(profile.avatar_url)
-
       await checkMyDailyPost(user.id) 
       await loadFeedLogic(user.id) 
     }
     init()
   }, [router])
 
-  // --- 1. UPDATE LOGIC: AMBIL DATA REACTION LENGKAP ---
   const checkMyDailyPost = async (userId) => {
     const { data } = await supabase
       .from('posts')
-      .select('*, reactions(reaction_value)') // Ambil tipe reaksinya juga
+      .select('*, reactions(reaction_value)') 
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -66,15 +56,12 @@ export default function Feed() {
     if (data) {
       const postDate = new Date(data.created_at).toDateString()
       const today = new Date().toDateString()
-      if (postDate === today) {
-        setMyDailyPost(data) 
-      }
+      if (postDate === today) setMyDailyPost(data) 
     }
   }
 
   const loadFeedLogic = async (userId) => {
     setLoading(true)
-    
     const todayStart = new Date()
     todayStart.setHours(0,0,0,0)
     
@@ -92,11 +79,7 @@ export default function Feed() {
       return
     }
 
-    const { data: seenData } = await supabase
-      .from('seen_posts')
-      .select('post_id')
-      .eq('user_id', userId)
-    
+    const { data: seenData } = await supabase.from('seen_posts').select('post_id').eq('user_id', userId)
     const seenPostIds = seenData?.map(s => s.post_id) || []
 
     const { data: rawPosts } = await supabase
@@ -108,11 +91,9 @@ export default function Feed() {
     if (rawPosts) {
       let filtered = rawPosts.filter(p => !seenPostIds.includes(p.id) && p.user_id !== userId)
       filtered = filtered.sort(() => Math.random() - 0.5)
-      
       const remainingQuota = DAILY_VIEW_LIMIT - currentViews
       setPosts(filtered.slice(0, remainingQuota))
     }
-    
     setLoading(false)
   }
 
@@ -135,12 +116,8 @@ export default function Feed() {
 
   const handleNextPost = async () => {
     if (currentCardIndex >= posts.length) return 
-
     const currentPost = posts[currentCardIndex]
-    await supabase.from('seen_posts').insert([
-        { user_id: user.id, post_id: currentPost.id }
-    ])
-
+    await supabase.from('seen_posts').insert([{ user_id: user.id, post_id: currentPost.id }])
     setCurrentCardIndex(prev => prev + 1)
     setViewCount(prev => prev + 1)
   }
@@ -148,17 +125,9 @@ export default function Feed() {
   const handleConfirmReport = async () => {
     if (!user) return
     const currentPost = posts[currentCardIndex]
-
-    const { error } = await supabase.from('reports').insert({
-        reporter_id: user.id,
-        post_id: currentPost.id,
-        reason: 'Inappropriate Content'
-    })
-
+    const { error } = await supabase.from('reports').insert({ reporter_id: user.id, post_id: currentPost.id, reason: 'Inappropriate Content' })
     if (!error) {
-        await supabase.from('seen_posts').insert([
-            { user_id: user.id, post_id: currentPost.id }
-        ])
+        await supabase.from('seen_posts').insert([{ user_id: user.id, post_id: currentPost.id }])
         setShowReportModal(false)
         setCurrentCardIndex(prev => prev + 1)
         setViewCount(prev => prev + 1)
@@ -184,7 +153,7 @@ export default function Feed() {
           </span>
         </button>
       ) : (
-        // KLIK KARTU -> BUKA MODAL DETAIL
+        // KARTU MINI (Klik -> Buka Modal Detail)
         <div 
             onClick={() => setShowMyDetail(true)}
             className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md w-full cursor-pointer hover:bg-white/5 transition-colors group"
@@ -193,7 +162,6 @@ export default function Feed() {
                 <img src={myDailyPost.image_url} className="w-full h-full object-cover" />
                 <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-black ${MOOD_STYLES[myDailyPost.mood]?.split(' ')[0] || 'bg-gray-500'}`}></div>
             </div>
-
             <div className="flex-1 text-left">
                 <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Your Truth Today</p>
                 <div className="flex items-center gap-2">
@@ -205,17 +173,60 @@ export default function Feed() {
                     </span>
                 </div>
             </div>
-
             <div className="text-gray-500 group-hover:text-white transition">→</div>
         </div>
       )}
     </div>
   )
 
+  // --- KOMPONEN BACKGROUND (Ambient) ---
+  const AmbientBackground = () => (
+    <>
+      <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] right-[-20%] w-[70%] h-[70%] rounded-full bg-blue-900/10 blur-[120px] animate-pulse-slow delay-1000 pointer-events-none"></div>
+    </>
+  )
+
+  // --- KOMPONEN EMPTY STATE (Radar) ---
+  const EmptyState = ({ message, subMessage }) => (
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+        <AmbientBackground />
+        
+        {/* Floating Card Postingan Sendiri (Tetap Muncul) */}
+        <div className="absolute top-24 z-50 w-full max-w-xs">
+            <UploadSection />
+        </div>
+
+        {/* Radar Animation */}
+        <div className="relative mb-8 mt-10">
+            <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center relative">
+                <div className="absolute inset-0 rounded-full border border-white/5 animate-ping opacity-20"></div>
+                <div className="absolute inset-2 rounded-full border border-white/5 animate-ping delay-75 opacity-10"></div>
+                <span className="text-2xl opacity-50">📡</span>
+            </div>
+        </div>
+
+        <p className="text-sm font-bold tracking-widest uppercase text-gray-400">{message}</p>
+        <p className="text-xs text-gray-600 mt-2 mb-10 max-w-xs leading-relaxed">{subMessage}</p>
+        
+        <div className="flex flex-col gap-3 w-full max-w-xs z-10">
+            <button 
+                onClick={() => router.push('/profile')} 
+                className="w-full px-6 py-4 rounded-full bg-white text-black font-bold text-xs tracking-[0.2em] hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+            >
+                OPEN ARCHIVE
+            </button>
+            <button onClick={() => window.location.reload()} className="text-[10px] uppercase tracking-widest text-gray-600 hover:text-white transition-colors py-2">
+                Scan Frequency Again
+            </button>
+        </div>
+    </div>
+  )
+
 
   // --- RENDER AREA ---
 
-  if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Checking Frequency...</div>
+  if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Initializing Feed...</div>
 
   // RENDER MODAL DETAIL POSTINGAN SENDIRI
   const renderMyDetailModal = () => {
@@ -223,39 +234,19 @@ export default function Feed() {
     return (
         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowMyDetail(false)}>
             <div className="bg-[#111] border border-white/10 rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-300" onClick={(e) => e.stopPropagation()}>
-                
-                <button 
-                    onClick={() => setShowMyDetail(false)}
-                    className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-white hover:text-black transition"
-                >
-                    &times;
-                </button>
-
+                <button onClick={() => setShowMyDetail(false)} className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-white hover:text-black transition">&times;</button>
                 <div className="relative aspect-[4/5]">
                     <img src={myDailyPost.image_url} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
-                    
-                    <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase border backdrop-blur-md ${MOOD_STYLES[myDailyPost.mood]}`}>
-                        {myDailyPost.mood}
-                    </div>
+                    <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase border backdrop-blur-md ${MOOD_STYLES[myDailyPost.mood]}`}>{myDailyPost.mood}</div>
                 </div>
-
                 <div className="p-6 -mt-12 relative z-10">
                     <p className="text-gray-300 text-sm leading-relaxed mb-6 font-light">
-                        <span className="font-bold text-white mr-2 block text-xs uppercase tracking-widest text-gray-500 mb-1">
-                            Today, {new Date(myDailyPost.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </span>
+                        <span className="font-bold text-white mr-2 block text-xs uppercase tracking-widest text-gray-500 mb-1">Today, {new Date(myDailyPost.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                         "{myDailyPost.caption}"
                     </p>
-
-                    {/* Stats Reactions */}
                     <div className="flex gap-2 bg-white/5 p-3 rounded-2xl border border-white/5">
-                        {[
-                           { label: 'Love', emoji: '❤️' },
-                           { label: 'Laugh', emoji: '😂' },
-                           { label: 'Crying', emoji: '😭' },
-                           { label: 'Hug', emoji: '🫂' }
-                        ].map(reaction => {
+                        {[{ label: 'Love', emoji: '❤️' }, { label: 'Laugh', emoji: '😂' }, { label: 'Crying', emoji: '😭' }, { label: 'Hug', emoji: '🫂' }].map(reaction => {
                            const count = getReactionCount(myDailyPost.reactions, reaction.label)
                            return (
                                <div key={reaction.label} className={`flex-1 flex flex-col items-center p-2 rounded-xl ${count > 0 ? 'bg-white/10 text-white' : 'text-gray-600 grayscale'}`}>
@@ -271,44 +262,29 @@ export default function Feed() {
     )
   }
 
-  // --- KONDISI TAMPILAN UTAMA ---
-
   // KONDISI 1: LIMIT HABIS
   if (viewCount >= DAILY_VIEW_LIMIT) {
     return (
-        <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center space-y-6">
-            {renderMyDetailModal()} {/* Modal harus bisa muncul di sini juga */}
-            
-            <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600">10/10</h1>
-            <div className="space-y-2">
-                <p className="text-xl font-bold">Cycle Complete.</p>
-                <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
-            </div>
-            
-            <UploadSection />
-
-            <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN ARCHIVE</button>
-        </div>
+        <>
+            {renderMyDetailModal()}
+            <EmptyState 
+                message="Cycle Complete" 
+                subMessage="You have reached the daily limit of 10 truths. Return to your reality."
+            />
+        </>
     )
   }
 
   // KONDISI 2: STOK HABIS
   if (currentCardIndex >= posts.length) {
     return (
-        <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center">
+        <>
             {renderMyDetailModal()}
-            
-            <UploadSection />
-
-            <div className="w-16 h-16 rounded-full border-2 border-dashed border-gray-700 animate-spin-slow mb-6"></div>
-            <p className="text-gray-500 text-sm tracking-widest uppercase">No more posts nearby.</p>
-            <p className="text-gray-600 text-xs mt-2 mb-8">Try again later.</p>
-            
-            <div className="flex flex-col gap-4 w-full max-w-xs">
-                <button onClick={() => router.push('/profile')} className="w-full px-6 py-3 rounded-full bg-white/10 border border-white/10 text-white font-bold text-xs tracking-widest hover:bg-white hover:text-black transition-all">OPEN PROFILE</button>
-                <button onClick={() => window.location.reload()} className="text-gray-500 hover:text-white underline text-xs transition-colors">Refresh Posts</button>
-            </div>
-        </div>
+            <EmptyState 
+                message="Silence Detected" 
+                subMessage="No more signals in your vicinity. Be the voice in the void."
+            />
+        </>
     )
   }
 
@@ -318,7 +294,10 @@ export default function Feed() {
   return (
     <div className="min-h-screen bg-[#050505] text-white overflow-hidden relative selection:bg-white/20">
       
-      {/* RENDER MODAL-MODAL DI SINI */}
+      {/* Background Ambience */}
+      <AmbientBackground />
+
+      {/* RENDER MODAL */}
       {renderMyDetailModal()}
       
       {showReportModal && (
@@ -348,19 +327,12 @@ export default function Feed() {
         </div>
       </nav>
 
-      <main className="h-screen w-full flex flex-col items-center justify-center px-4 pt-16 pb-24">
+      <main className="h-screen w-full flex flex-col items-center justify-center px-4 pt-16 pb-24 relative z-10">
         
-        {/* Floating Mini Card */}
-        {myDailyPost && (
-            <div className="absolute top-20 z-40 animate-fade-in-down w-full max-w-xs">
-                 <UploadSection />
-            </div>
-        )}
-        {!myDailyPost && (
-             <div className="absolute top-20 z-40 animate-fade-in-down w-full max-w-xs">
-                <UploadSection />
-             </div>
-        )}
+        {/* Floating Mini Card (Dengan posisi yg lebih rapi) */}
+        <div className="absolute top-20 z-40 animate-fade-in-down w-full max-w-xs">
+             <UploadSection />
+        </div>
 
         <div className="relative w-full max-w-sm aspect-[4/5] bg-[#111] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl">
             <img src={post.image_url} className="w-full h-full object-cover" />
