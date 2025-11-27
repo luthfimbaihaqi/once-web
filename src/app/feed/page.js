@@ -98,6 +98,7 @@ export default function Feed() {
       .limit(50)
 
     if (rawPosts) {
+      // Filter: Buang post yang sudah dilihat DAN post milik user sendiri
       let filtered = rawPosts.filter(p => !seenPostIds.includes(p.id) && p.user_id !== userId)
       filtered = filtered.sort(() => Math.random() - 0.5)
       
@@ -162,7 +163,7 @@ export default function Feed() {
     return postReactions.filter(r => r.reaction_value === type).length
   }
 
-  // --- KOMPONEN TOMBOL UPLOAD (Biar Reusable) ---
+  // --- KOMPONEN TOMBOL UPLOAD ---
   const UploadSection = () => (
     <div className="mb-8 w-full max-w-xs flex justify-center">
       {!hasPostedToday ? (
@@ -176,10 +177,15 @@ export default function Feed() {
           </span>
         </button>
       ) : (
+        // --- REVISI TEKS DI SINI ---
         <div className="px-6 py-4 rounded-2xl bg-white/5 border border-white/10 text-center backdrop-blur-sm w-full">
             <span className="text-xl mb-1 block animate-pulse">✨</span>
-            <p className="text-sm font-bold text-gray-200 tracking-wider">FREQUENCY LOCKED</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] mt-1">Recharge for tomorrow</p>
+            <p className="text-sm font-bold text-gray-200 tracking-wider uppercase">
+              YOU HAVE SHARED YOUR TRUTH TODAY
+            </p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] mt-1">
+              See you tomorrow at 00:00
+            </p>
         </div>
       )}
     </div>
@@ -200,7 +206,6 @@ export default function Feed() {
                 <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
             </div>
             
-            {/* Tetap tampilkan status upload di sini juga */}
             <UploadSection />
 
             <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN ARCHIVE</button>
@@ -213,7 +218,6 @@ export default function Feed() {
     return (
         <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center">
             
-            {/* UPDATE: Masukkan Tombol Upload di sini! */}
             <UploadSection />
 
             <div className="w-16 h-16 rounded-full border-2 border-dashed border-gray-700 animate-spin-slow mb-6"></div>
@@ -228,7 +232,6 @@ export default function Feed() {
     )
   }
 
-  // KONDISI 3: TAMPILKAN KARTU
   const post = posts[currentCardIndex]
   const userReaction = post.reactions?.find(r => r.user_id === user.id)?.reaction_value
 
@@ -264,7 +267,6 @@ export default function Feed() {
 
       <main className="h-screen w-full flex flex-col items-center justify-center px-4 pt-16 pb-24">
         
-        {/* Tombol Upload (Floating jika ada kartu) */}
         {!hasPostedToday && (
             <div className="absolute top-20 z-40 animate-fade-in-down">
                  <button onClick={() => router.push('/upload')} className="bg-white text-black px-5 py-2 rounded-full text-xs font-black tracking-widest shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:scale-105 transition-transform">
