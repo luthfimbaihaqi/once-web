@@ -129,7 +129,7 @@ export default function Home() {
                   <span className="animate-pulse">Entering...</span>
                 ) : (
                   <>
-                    {isSignUp ? 'CREATE ACCOUNT' : 'ENTER THE VOID'} 
+                    {isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'} 
                     <span className="text-xl leading-none group-hover:translate-x-1 transition-transform">→</span>
                   </>
                 )}
@@ -144,7 +144,7 @@ export default function Home() {
             onClick={() => setIsSignUp(!isSignUp)}
             className="text-sm text-gray-500 hover:text-white transition-colors uppercase tracking-widest relative group py-2"
           >
-            {isSignUp ? 'Back to Login' : 'Join the Silence'}
+            {isSignUp ? 'Back to Login' : 'Sign Up'}
             <span className="absolute bottom-0 left-1/2 w-0 h-[1px] bg-white transition-all duration-300 group-hover:w-full group-hover:left-0"></span>
           </button>
         </div>

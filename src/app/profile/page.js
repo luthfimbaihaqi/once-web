@@ -3,14 +3,25 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
+// WARNA GRADASI UNTUK VIBE CARD (LEBIH VIBRANT)
+const VIBE_CARD_STYLES = {
+  'Happy': 'from-yellow-900/40 to-black border-yellow-500/30',
+  'Sad': 'from-blue-900/40 to-black border-blue-500/30',
+  'InLove': 'from-pink-900/40 to-black border-pink-500/30',
+  'Angry': 'from-red-900/40 to-black border-red-500/30',
+  'Gloomy': 'from-gray-800/40 to-black border-gray-500/30',
+  'Boring': 'from-orange-900/40 to-black border-orange-500/30',
+  'FlatFace': 'from-slate-800/40 to-black border-slate-500/30',
+}
+
 const MOOD_COLORS = {
-  'Happy': 'bg-yellow-400 shadow-yellow-400/50',
-  'Sad': 'bg-blue-500 shadow-blue-500/50',
-  'InLove': 'bg-pink-500 shadow-pink-500/50',
-  'Angry': 'bg-red-500 shadow-red-500/50',
-  'Gloomy': 'bg-gray-400 shadow-gray-400/50',
-  'Boring': 'bg-orange-400 shadow-orange-400/50',
-  'FlatFace': 'bg-slate-500 shadow-slate-500/50',
+  'Happy': 'bg-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]',
+  'Sad': 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]',
+  'InLove': 'bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.5)]',
+  'Angry': 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]',
+  'Gloomy': 'bg-gray-400 shadow-[0_0_10px_rgba(156,163,175,0.5)]',
+  'Boring': 'bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.5)]',
+  'FlatFace': 'bg-slate-500 shadow-[0_0_10px_rgba(100,116,139,0.5)]',
 }
 
 const MOOD_STYLES_BADGE = {
@@ -80,7 +91,6 @@ export default function Profile() {
   const [profile, setProfile] = useState(null) 
   const [myPosts, setMyPosts] = useState([])
   const [loading, setLoading] = useState(true)
-  
   const [stats, setStats] = useState({ dominant: null, total: 0, streak: 0, calendar: [], advice: '' })
   
   const [selectedPost, setSelectedPost] = useState(null)
@@ -89,7 +99,8 @@ export default function Profile() {
 
   const [editForm, setEditForm] = useState({ username: '', bio: '', avatarFile: null, avatarPreview: null })
   const [saving, setSaving] = useState(false)
-  
+  const fileInputRef = useRef(null)
+
   const router = useRouter()
 
   useEffect(() => {
@@ -107,30 +118,15 @@ export default function Profile() {
   }, [router])
 
   const fetchProfileData = async (userId) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
     if (data) {
         setProfile(data)
-        setEditForm({ 
-            username: data.username || '', // Safety check kalau null
-            bio: data.bio || '', 
-            avatarFile: null, 
-            avatarPreview: data.avatar_url 
-        })
+        setEditForm({ username: data.username || '', bio: data.bio || '', avatarFile: null, avatarPreview: data.avatar_url })
     }
   }
 
   const fetchMyPosts = async (userId) => {
-    const { data } = await supabase
-      .from('posts')
-      .select('*, reactions(reaction_value)')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-
+    const { data } = await supabase.from('posts').select('*, reactions(reaction_value)').eq('user_id', userId).order('created_at', { ascending: false })
     if (data) {
       setMyPosts(data)
       generateStats(data)
@@ -182,28 +178,20 @@ export default function Profile() {
         isFuture: d > new Date()
       })
     }
-
     setStats({ dominant, total: posts.length, streak: currentStreak, calendar, advice: selectedAdvice })
   }
 
-  // --- LOGIKA EDIT PROFILE (SAFE MODE) ---
   const handleAvatarChange = (e) => {
     const file = e.target.files[0]
     e.target.value = ''
-
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
         alert("File is too big! Please choose an image under 5MB.")
         return
       }
-
       const reader = new FileReader()
       reader.onloadend = () => {
-        setEditForm(prev => ({ 
-            ...prev, 
-            avatarFile: file, 
-            avatarPreview: reader.result 
-        }))
+        setEditForm(prev => ({ ...prev, avatarFile: file, avatarPreview: reader.result }))
       }
       reader.readAsDataURL(file)
     }
@@ -212,65 +200,39 @@ export default function Profile() {
   const handleSaveProfile = async () => {
     setSaving(true)
     try {
-        const updates = {
-            id: user.id,
-            username: editForm.username, 
-            bio: editForm.bio,
-            updated_at: new Date(),
-        }
-
-        // FIX: Hanya jalankan validasi username jika 'profile' ada dan username berubah
-        // Jika profile null (user baru/error), anggap boleh update
+        const updates = { id: user.id, username: editForm.username, bio: editForm.bio, updated_at: new Date() }
         if (profile && editForm.username !== profile.username) {
             const lastChanged = profile.username_last_changed ? new Date(profile.username_last_changed) : null
             const now = new Date()
-            
             if (lastChanged) {
                 const diffTime = Math.abs(now - lastChanged)
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) 
-                
                 if (diffDays < 30) {
                     alert(`Username can only be changed once every 30 days. Try again in ${30 - diffDays} days.`)
                     setSaving(false)
                     return
                 }
             }
-
-            const { data: existing } = await supabase
-                .from('profiles')
-                .select('username')
-                .eq('username', editForm.username)
-                .neq('id', user.id) 
-                .single()
-            
+            const { data: existing } = await supabase.from('profiles').select('username').eq('username', editForm.username).neq('id', user.id).single()
             if (existing) {
                 alert('Username already taken!')
                 setSaving(false)
                 return
             }
-
             updates.username_last_changed = new Date()
         }
-
         if (editForm.avatarFile) {
             const fileName = `avatar_${user.id}_${Date.now()}.jpg`
-            const { error: uploadError } = await supabase.storage
-                .from('posts') 
-                .upload(fileName, editForm.avatarFile)
-            
+            const { error: uploadError } = await supabase.storage.from('posts').upload(fileName, editForm.avatarFile)
             if (uploadError) throw uploadError
-
             const { data: publicUrlData } = supabase.storage.from('posts').getPublicUrl(fileName)
             updates.avatar_url = publicUrlData.publicUrl
         }
-
         const { error } = await supabase.from('profiles').upsert(updates)
         if (error) throw error
-
         await fetchProfileData(user.id)
         setIsEditing(false)
         alert('Profile updated successfully!')
-
     } catch (error) {
         console.error(error)
         alert('Error updating profile: ' + error.message)
@@ -299,83 +261,60 @@ export default function Profile() {
     return reactions?.filter(r => r.reaction_value === type).length || 0
   }
 
+  // --- COMPONENT: Ambient Background ---
+  const AmbientBackground = () => (
+    <>
+      <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] right-[-20%] w-[70%] h-[70%] rounded-full bg-blue-900/10 blur-[120px] animate-pulse-slow delay-1000 pointer-events-none"></div>
+    </>
+  )
+
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>
 
   return (
-    <div className="min-h-screen bg-black text-white pb-10 font-sans relative">
-      
-      {/* --- MODAL EDIT PROFILE --- */}
+    <div className="min-h-screen bg-[#050505] text-white pb-10 font-sans relative selection:bg-white/20">
+      <AmbientBackground />
+
+      {/* EDIT MODAL */}
       {isEditing && (
         <div className="fixed inset-0 z-[90] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#111] border border-white/10 p-6 rounded-[2rem] w-full max-w-sm shadow-2xl relative">
                 <button onClick={() => setIsEditing(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">&times;</button>
-                
                 <h3 className="text-xl font-bold mb-6 text-center">Edit Profile</h3>
-                
                 <div className="space-y-6">
-                    
-                    {/* GHOST INPUT UPLOAD */}
+                    {/* AVATAR UPLOAD (LABEL METHOD) */}
                     <div className="flex flex-col items-center gap-3">
-                        <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-dashed border-gray-600 group">
-                            
+                        <label htmlFor="avatar-upload-input" className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-dashed border-gray-600 group cursor-pointer bg-gray-800 active:scale-95 transition-transform">
                             {editForm.avatarPreview ? (
                                 <img src={editForm.avatarPreview} className="w-full h-full object-cover pointer-events-none" />
                             ) : (
-                                <div className="w-full h-full bg-gray-800 flex items-center justify-center text-2xl pointer-events-none">📸</div>
+                                <div className="w-full h-full flex items-center justify-center text-2xl pointer-events-none">📸</div>
                             )}
-                            
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold pointer-events-none">CHANGE</div>
-
-                            <input 
-                                type="file" 
-                                onChange={handleAvatarChange} 
-                                accept="image/png, image/jpeg, image/jpg, image/webp" 
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
-                            />
-                        </div>
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold text-white pointer-events-none">CHANGE</div>
+                        </label>
+                        <input id="avatar-upload-input" type="file" onChange={handleAvatarChange} accept="image/png, image/jpeg, image/jpg, image/webp" className="hidden" />
                         <span className="text-[10px] text-gray-500">Tap image to change</span>
                     </div>
-
                     <div className="space-y-1">
                         <label className="text-xs text-gray-500 uppercase tracking-widest pl-1">Username</label>
-                        <input 
-                            type="text" 
-                            value={editForm.username}
-                            onChange={(e) => setEditForm({...editForm, username: e.target.value.toLowerCase().replace(/\s/g, '')})}
-                            className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white transition"
-                        />
+                        <input type="text" value={editForm.username} onChange={(e) => setEditForm({...editForm, username: e.target.value.toLowerCase().replace(/\s/g, '')})} className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white transition" />
                         <p className="text-[10px] text-gray-600 pl-1">Change limit: Once every 30 days.</p>
                     </div>
-
                     <div className="space-y-1">
                         <label className="text-xs text-gray-500 uppercase tracking-widest pl-1">Bio</label>
-                        <textarea 
-                            value={editForm.bio}
-                            onChange={(e) => setEditForm({...editForm, bio: e.target.value})}
-                            maxLength={80}
-                            rows={2}
-                            placeholder="Tell your truth..."
-                            className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white transition resize-none"
-                        />
+                        <textarea value={editForm.bio} onChange={(e) => setEditForm({...editForm, bio: e.target.value})} maxLength={80} rows={2} placeholder="Tell your truth..." className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white transition resize-none" />
                         <div className="text-right text-[10px] text-gray-600">{editForm.bio.length}/80</div>
                     </div>
-
-                    <button 
-                        onClick={handleSaveProfile}
-                        disabled={saving}
-                        className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition disabled:opacity-50"
-                    >
-                        {saving ? 'Saving...' : 'Save Changes'}
-                    </button>
+                    <button onClick={handleSaveProfile} disabled={saving} className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition disabled:opacity-50">{saving ? 'Saving...' : 'Save Changes'}</button>
                 </div>
             </div>
         </div>
       )}
 
-      {/* --- MODAL DETAIL & DELETE --- */}
+      {/* DETAIL MODAL */}
       {selectedPost && (
          <div className="fixed inset-0 z-[80] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setSelectedPost(null)}>
-            <div className="bg-[#111] border border-white/10 rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#111] border border-white/10 rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-300" onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => setSelectedPost(null)} className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-white hover:text-black transition">&times;</button>
                 <div className="relative aspect-[4/5]">
                     <img src={selectedPost.image_url} className="w-full h-full object-cover" />
@@ -404,7 +343,7 @@ export default function Profile() {
          </div>
       )}
 
-      {/* --- CONFIRM DELETE MODAL --- */}
+      {/* CONFIRM DELETE MODAL */}
       {deletingId && (
           <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-[#111] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-[0_0_50px_rgba(220,38,38,0.2)]">
@@ -418,88 +357,92 @@ export default function Profile() {
           </div>
       )}
 
-      {/* --- MAIN PAGE --- */}
-      <div className="max-w-md mx-auto min-h-screen bg-black border-x border-gray-900 shadow-2xl relative">
-        <header className="p-6 flex justify-between items-center sticky top-0 bg-black/80 backdrop-blur-md z-40">
-          <button onClick={() => router.push('/feed')} className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center hover:bg-gray-800 transition">&larr;</button>
+      {/* MAIN CONTAINER */}
+      <div className="max-w-md mx-auto min-h-screen bg-[#050505] border-x border-white/5 shadow-2xl relative">
+        <header className="p-6 flex justify-between items-center sticky top-0 bg-[#050505]/80 backdrop-blur-md z-40">
+          <button onClick={() => router.push('/feed')} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition">&larr;</button>
           <span className="font-bold tracking-widest text-sm">PROFILE</span>
           <button onClick={handleLogout} className="text-xs text-gray-500 hover:text-red-500 transition">LOGOUT</button>
         </header>
 
-        {/* PROFILE INFO */}
-        <section className="flex flex-col items-center pt-4 pb-8 relative group">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-1 mb-4">
-            <div className="w-full h-full bg-black rounded-full flex items-center justify-center border-4 border-transparent overflow-hidden">
-               {/* Gunakan avatar dari profile, atau editForm (preview), atau inisial */}
-               {(profile?.avatar_url || user?.email) ? (
-                   <img src={profile?.avatar_url} className="w-full h-full object-cover" onError={(e) => e.target.style.display='none'} />
-               ) : null}
-               
-               {!profile?.avatar_url && (
-                   <span className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-indigo-400 to-pink-400 absolute">
-                     {user?.email?.[0].toUpperCase()}
-                   </span>
-               )}
-            </div>
+        {/* PROFILE INFO & AVATAR (DENGAN GLOW) */}
+        <section className="flex flex-col items-center pt-6 pb-8 relative group">
+          <div className="relative">
+              {/* Glow Effect di belakang Avatar */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-full blur-xl opacity-30 group-hover:opacity-50 transition duration-700"></div>
+              
+              <div className="relative w-28 h-28 rounded-full p-[2px] bg-gradient-to-br from-white/20 to-white/5 overflow-hidden">
+                <div className="w-full h-full bg-black rounded-full overflow-hidden flex items-center justify-center">
+                    {(profile?.avatar_url || user?.email) ? (
+                        <img src={profile?.avatar_url} className="w-full h-full object-cover" onError={(e) => e.target.style.display='none'} />
+                    ) : null}
+                    {!profile?.avatar_url && (
+                        <span className="text-4xl font-bold text-gray-700">{user?.email?.[0].toUpperCase()}</span>
+                    )}
+                </div>
+              </div>
           </div>
           
-          <h2 className="text-xl font-bold">{profile?.username || user?.email?.split('@')[0]}</h2>
+          <h2 className="text-2xl font-bold mt-4 tracking-tight">{profile?.username || user?.email?.split('@')[0]}</h2>
           
           {profile?.bio && (
-              <p className="text-sm text-gray-400 mt-2 max-w-[200px] text-center italic">"{profile.bio}"</p>
+              <p className="text-sm text-gray-400 mt-2 max-w-[200px] text-center italic leading-relaxed">"{profile.bio}"</p>
           )}
 
           <button 
             onClick={() => setIsEditing(true)}
-            className="mt-4 px-4 py-1.5 rounded-full border border-gray-700 text-xs font-bold text-gray-400 hover:bg-gray-800 hover:text-white transition"
+            className="mt-6 px-5 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:bg-white hover:text-black transition-all"
           >
             Edit Profile
           </button>
 
-          <div className="flex gap-4 mt-6 text-center">
-            <div><span className="block font-bold text-lg">{stats.total}</span><span className="text-xs text-gray-500 uppercase">Once</span></div>
-            <div className="w-[1px] bg-gray-800"></div>
-            <div><span className="block font-bold text-lg">{stats.streak}</span><span className="text-xs text-gray-500 uppercase">Streak</span></div>
+          <div className="flex gap-8 mt-8 text-center">
+            <div><span className="block font-black text-xl">{stats.total}</span><span className="text-[10px] text-gray-500 uppercase tracking-widest">Memories</span></div>
+            <div className="w-[1px] bg-white/10"></div>
+            <div><span className="block font-black text-xl">{stats.streak}</span><span className="text-[10px] text-gray-500 uppercase tracking-widest">Day Streak</span></div>
           </div>
         </section>
 
-        {/* MOOD CALENDAR */}
+        {/* MOOD CALENDAR (IMPROVED UI) */}
         <section className="px-6 mb-8">
-          <h3 className="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest">This Week</h3>
-          <div className="flex justify-between items-start bg-gray-900/50 p-4 rounded-2xl border border-gray-800">
+          <div className="flex justify-between items-end bg-white/5 p-5 rounded-3xl border border-white/5 relative overflow-hidden">
+            {/* Background Glow Halus */}
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
+            
             {stats.calendar.map((day, idx) => (
-              <div key={idx} className={`flex flex-col items-center gap-3 ${day.isFuture ? 'opacity-30' : 'opacity-100'}`}>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">{day.dayShort}</span>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${day.mood ? `${MOOD_COLORS[day.mood]} shadow-lg scale-100` : 'bg-gray-800 scale-90 border border-gray-700'}`}></div>
+              <div key={idx} className={`flex flex-col items-center gap-3 relative z-10 ${day.isFuture ? 'opacity-20' : 'opacity-100'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${day.mood ? `${MOOD_COLORS[day.mood]} scale-110` : 'bg-white/5 border border-white/10'}`}></div>
+                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{day.dayShort}</span>
               </div>
             ))}
           </div>
         </section>
 
+        {/* WEEKLY VIBE (COLORED CARD) */}
         {stats.dominant && (
           <section className="px-6 mb-8">
-            <div className="bg-gradient-to-r from-gray-900 to-black border border-gray-800 p-6 rounded-2xl relative overflow-hidden">
-              <div className={`absolute top-0 right-0 w-20 h-20 blur-3xl opacity-20 ${MOOD_COLORS[stats.dominant]}`}></div>
-              <h3 className="text-gray-400 text-xs font-bold uppercase mb-1">Weekly Vibe</h3>
-              <p className="text-2xl font-bold text-white mb-2">{stats.dominant}</p>
-              <p className="text-sm text-gray-400 italic">"{stats.advice}"</p>
+            <div className={`border p-6 rounded-3xl relative overflow-hidden bg-gradient-to-br ${VIBE_CARD_STYLES[stats.dominant]}`}>
+              <h3 className="text-white/60 text-[10px] font-bold uppercase mb-2 tracking-[0.2em]">Weekly Vibe</h3>
+              <p className="text-3xl font-black text-white mb-3 tracking-tighter">{stats.dominant}</p>
+              <p className="text-xs text-white/80 italic font-medium leading-relaxed">"{stats.advice}"</p>
             </div>
           </section>
         )}
 
+        {/* ARCHIVE GRID */}
         <section className="px-1 pb-12">
           <div className="flex items-center justify-between px-5 mb-4">
              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Archive</h3>
-             <span className="text-xs text-gray-600">Tap to view</span>
+             <span className="text-[10px] text-gray-600">Tap to expand</span>
           </div>
           <div className="grid grid-cols-3 gap-0.5">
             {myPosts.length === 0 ? (
-               <div className="col-span-3 py-20 text-center text-gray-600 text-sm">Create your first memory today.</div>
+               <div className="col-span-3 py-20 text-center text-gray-600 text-xs tracking-widest uppercase border border-dashed border-white/10 rounded-2xl mx-4 mt-2">No memories yet</div>
             ) : (
               myPosts.map((post) => (
-                <div key={post.id} onClick={() => setSelectedPost(post)} className="relative aspect-square group cursor-pointer overflow-hidden bg-gray-900 hover:opacity-90 transition">
-                  <img src={post.image_url} className="w-full h-full object-cover" />
-                  <div className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${MOOD_COLORS[post.mood]}`}></div>
+                <div key={post.id} onClick={() => setSelectedPost(post)} className="relative aspect-square group cursor-pointer overflow-hidden bg-white/5">
+                  <img src={post.image_url} className="w-full h-full object-cover transition duration-500 group-hover:scale-110 group-hover:opacity-80" />
+                  <div className={`absolute bottom-1.5 right-1.5 w-2 h-2 rounded-full ${MOOD_COLORS[post.mood]}`}></div>
                 </div>
               ))
             )}
