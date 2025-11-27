@@ -18,9 +18,8 @@ const DAILY_VIEW_LIMIT = 10
 
 export default function Feed() {
   const [user, setUser] = useState(null)
-  const [userAvatar, setUserAvatar] = useState(null) // Avatar user yang sedang login (untuk header)
+  const [userAvatar, setUserAvatar] = useState(null) 
   
-  // State Data
   const [posts, setPosts] = useState([]) 
   const [currentCardIndex, setCurrentCardIndex] = useState(0) 
   const [viewCount, setViewCount] = useState(0) 
@@ -40,7 +39,6 @@ export default function Feed() {
       }
       setUser(user)
       
-      // Ambil avatar user sendiri untuk header
       const { data: profile } = await supabase.from('profiles').select('avatar_url').eq('id', user.id).single()
       if (profile) setUserAvatar(profile.avatar_url)
 
@@ -93,7 +91,6 @@ export default function Feed() {
     
     const seenPostIds = seenData?.map(s => s.post_id) || []
 
-    // UPDATE QUERY: Tambah 'avatar_url' di dalam select profiles
     const { data: rawPosts } = await supabase
       .from('posts')
       .select(`*, profiles ( username, avatar_url ), reactions ( user_id, reaction_value )`)
@@ -165,11 +162,35 @@ export default function Feed() {
     return postReactions.filter(r => r.reaction_value === type).length
   }
 
+  // --- KOMPONEN TOMBOL UPLOAD (Biar Reusable) ---
+  const UploadSection = () => (
+    <div className="mb-8 w-full max-w-xs flex justify-center">
+      {!hasPostedToday ? (
+        <button 
+          onClick={() => router.push('/upload')} 
+          className="group relative w-full overflow-hidden rounded-full bg-white py-4 text-black font-black tracking-widest text-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.4)]"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-white to-gray-200 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <span className="relative z-10 flex items-center justify-center gap-2">
+            <span>+ SHARE YOUR TRUTH</span>
+          </span>
+        </button>
+      ) : (
+        <div className="px-6 py-4 rounded-2xl bg-white/5 border border-white/10 text-center backdrop-blur-sm w-full">
+            <span className="text-xl mb-1 block animate-pulse">✨</span>
+            <p className="text-sm font-bold text-gray-200 tracking-wider">FREQUENCY LOCKED</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] mt-1">Recharge for tomorrow</p>
+        </div>
+      )}
+    </div>
+  )
+
 
   // --- RENDER AREA ---
 
   if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Checking Frequency...</div>
 
+  // KONDISI 1: LIMIT HABIS (QUOTA REACHED)
   if (viewCount >= DAILY_VIEW_LIMIT) {
     return (
         <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center space-y-6">
@@ -178,32 +199,42 @@ export default function Feed() {
                 <p className="text-xl font-bold">Cycle Complete.</p>
                 <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
             </div>
-            <button onClick={() => router.push('/profile')} className="mt-8 px-8 py-3 rounded-full bg-white/5 border border-white/10 hover:bg-white text-gray-300 hover:text-black transition-all duration-500 font-bold text-sm tracking-widest">OPEN ARCHIVE</button>
+            
+            {/* Tetap tampilkan status upload di sini juga */}
+            <UploadSection />
+
+            <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN ARCHIVE</button>
         </div>
     )
   }
 
+  // KONDISI 2: TIDAK ADA POSTINGAN LAGI (STOK HABIS / KOSONG)
   if (currentCardIndex >= posts.length) {
     return (
         <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center">
+            
+            {/* UPDATE: Masukkan Tombol Upload di sini! */}
+            <UploadSection />
+
             <div className="w-16 h-16 rounded-full border-2 border-dashed border-gray-700 animate-spin-slow mb-6"></div>
             <p className="text-gray-500 text-sm tracking-widest uppercase">No more signals nearby.</p>
             <p className="text-gray-600 text-xs mt-2 mb-8">Try again later.</p>
+            
             <div className="flex flex-col gap-4 w-full max-w-xs">
-                <button onClick={() => router.push('/profile')} className="w-full px-6 py-3 rounded-full bg-white text-black font-bold text-xs tracking-widest hover:scale-105 transition-transform">OPEN PROFILE</button>
+                <button onClick={() => router.push('/profile')} className="w-full px-6 py-3 rounded-full bg-white/10 border border-white/10 text-white font-bold text-xs tracking-widest hover:bg-white hover:text-black transition-all">OPEN PROFILE</button>
                 <button onClick={() => window.location.reload()} className="text-gray-500 hover:text-white underline text-xs transition-colors">Refresh Signal</button>
             </div>
         </div>
     )
   }
 
+  // KONDISI 3: TAMPILKAN KARTU
   const post = posts[currentCardIndex]
   const userReaction = post.reactions?.find(r => r.user_id === user.id)?.reaction_value
 
   return (
     <div className="min-h-screen bg-[#050505] text-white overflow-hidden relative selection:bg-white/20">
       
-      {/* REPORT MODAL */}
       {showReportModal && (
           <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-[#111] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-[0_0_50px_rgba(255,165,0,0.2)]">
@@ -217,12 +248,10 @@ export default function Feed() {
           </div>
       )}
 
-      {/* HEADER */}
       <nav className="fixed top-0 w-full px-6 py-4 flex justify-between items-center z-50 mix-blend-difference">
         <h1 className="text-xl font-black tracking-tighter">ONCE.</h1>
         <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-gray-500">{viewCount + 1} / {DAILY_VIEW_LIMIT}</span>
-            {/* Tombol Profile di Header - Tampilkan Avatar Sendiri */}
             <button onClick={() => router.push('/profile')} className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold border border-white/20 overflow-hidden">
                 {userAvatar ? (
                     <img src={userAvatar} className="w-full h-full object-cover" />
@@ -233,11 +262,14 @@ export default function Feed() {
         </div>
       </nav>
 
-      {/* SINGLE CARD */}
       <main className="h-screen w-full flex flex-col items-center justify-center px-4 pt-16 pb-24">
+        
+        {/* Tombol Upload (Floating jika ada kartu) */}
         {!hasPostedToday && (
-            <div className="absolute top-20 z-40">
-                 <button onClick={() => router.push('/upload')} className="bg-white text-black px-4 py-1 rounded-full text-xs font-bold shadow-[0_0_20px_rgba(255,255,255,0.4)] animate-bounce">+ Share Your Truth</button>
+            <div className="absolute top-20 z-40 animate-fade-in-down">
+                 <button onClick={() => router.push('/upload')} className="bg-white text-black px-5 py-2 rounded-full text-xs font-black tracking-widest shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:scale-105 transition-transform">
+                    + SHARE TRUTH
+                 </button>
             </div>
         )}
 
@@ -252,7 +284,6 @@ export default function Feed() {
 
                 <div className="pointer-events-auto">
                     <div className="flex items-center gap-2 mb-2">
-                         {/* AVATAR USER LAIN DI FEED */}
                          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[10px] border border-white/20 overflow-hidden">
                             {post.profiles?.avatar_url ? (
                                 <img src={post.profiles.avatar_url} className="w-full h-full object-cover" />
