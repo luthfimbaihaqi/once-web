@@ -187,10 +187,13 @@ export default function Profile() {
     setStats({ dominant, total: posts.length, streak: currentStreak, calendar, advice: selectedAdvice })
   }
 
-  // --- LOGIKA EDIT PROFILE (FIXED UNTUK MOBILE) ---
+  // --- LOGIKA EDIT PROFILE (FIXED FOR MOBILE) ---
   const handleAvatarChange = (e) => {
     const file = e.target.files[0]
     
+    // Reset value agar bisa pilih file yang sama jika perlu
+    e.target.value = ''
+
     if (file) {
       // 1. Validasi Ukuran (Max 5MB)
       if (file.size > 5 * 1024 * 1024) {
@@ -198,12 +201,18 @@ export default function Profile() {
         return
       }
 
-      // 2. Set State Preview
-      setEditForm(prev => ({ 
-        ...prev, 
-        avatarFile: file, 
-        avatarPreview: URL.createObjectURL(file) 
-      }))
+      // 2. Pakai FileReader (Lebih stabil di HP)
+      const reader = new FileReader()
+      
+      reader.onloadend = () => {
+        setEditForm(prev => ({ 
+            ...prev, 
+            avatarFile: file, 
+            avatarPreview: reader.result 
+        }))
+      }
+
+      reader.readAsDataURL(file)
     }
   }
 
@@ -321,7 +330,7 @@ export default function Profile() {
                             )}
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold">CHANGE</div>
                         </div>
-                        {/* INPUT FIXED FOR MOBILE: ACCEPT SPECIFIC FORMAT */}
+                        {/* INPUT FILE DENGAN ACCEPT */}
                         <input 
                             type="file" 
                             ref={fileInputRef} 
