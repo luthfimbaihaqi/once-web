@@ -26,10 +26,12 @@ export default function Feed() {
   
   const [loading, setLoading] = useState(true)
   
-  // STATE BARU: Menyimpan DATA post saya hari ini (bukan cuma status true/false)
+  // STATE DATA POSTINGAN SAYA
   const [myDailyPost, setMyDailyPost] = useState(null)
   
+  // STATE MODAL
   const [showReportModal, setShowReportModal] = useState(false)
+  const [showMyDetail, setShowMyDetail] = useState(false) // State untuk Modal Detail Post Saya
 
   const router = useRouter()
 
@@ -45,18 +47,17 @@ export default function Feed() {
       const { data: profile } = await supabase.from('profiles').select('avatar_url').eq('id', user.id).single()
       if (profile) setUserAvatar(profile.avatar_url)
 
-      await checkMyDailyPost(user.id) // Cek post saya
-      await loadFeedLogic(user.id) // Cek feed orang lain
+      await checkMyDailyPost(user.id) 
+      await loadFeedLogic(user.id) 
     }
     init()
   }, [router])
 
-  // --- 1. UPDATE LOGIC: AMBIL DATA POST SAYA ---
+  // --- 1. UPDATE LOGIC: AMBIL DATA REACTION LENGKAP ---
   const checkMyDailyPost = async (userId) => {
-    // Ambil data lengkap: id, image, mood, reactions
     const { data } = await supabase
       .from('posts')
-      .select('*, reactions(id)') // Kita hitung jumlah reactionnya
+      .select('*, reactions(reaction_value)') // Ambil tipe reaksinya juga
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -66,7 +67,7 @@ export default function Feed() {
       const postDate = new Date(data.created_at).toDateString()
       const today = new Date().toDateString()
       if (postDate === today) {
-        setMyDailyPost(data) // Simpan data post ke state
+        setMyDailyPost(data) 
       }
     }
   }
@@ -166,14 +167,13 @@ export default function Feed() {
   }
 
   const getReactionCount = (postReactions, type) => {
-    return postReactions.filter(r => r.reaction_value === type).length
+    return postReactions?.filter(r => r.reaction_value === type).length || 0
   }
 
-  // --- 2. KOMPONEN BARU: MINI CARD ---
+  // --- KOMPONEN TOMBOL UPLOAD / MINI CARD ---
   const UploadSection = () => (
     <div className="mb-8 w-full max-w-xs flex justify-center z-50">
       {!myDailyPost ? (
-        // TOMBOL UPLOAD BIASA
         <button 
           onClick={() => router.push('/upload')} 
           className="group relative w-full overflow-hidden rounded-full bg-white py-4 text-black font-black tracking-widest text-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.4)]"
@@ -184,25 +184,22 @@ export default function Feed() {
           </span>
         </button>
       ) : (
-        // KARTU MINI POSTINGAN SAYA (UPDATE!)
+        // KLIK KARTU -> BUKA MODAL DETAIL
         <div 
-            onClick={() => router.push('/profile')}
+            onClick={() => setShowMyDetail(true)}
             className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md w-full cursor-pointer hover:bg-white/5 transition-colors group"
         >
-            {/* Thumbnail Foto */}
             <div className="h-12 w-12 rounded-lg overflow-hidden border border-white/10 relative">
                 <img src={myDailyPost.image_url} className="w-full h-full object-cover" />
                 <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-black ${MOOD_STYLES[myDailyPost.mood]?.split(' ')[0] || 'bg-gray-500'}`}></div>
             </div>
 
-            {/* Info Teks */}
             <div className="flex-1 text-left">
                 <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Your Truth Today</p>
                 <div className="flex items-center gap-2">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${MOOD_STYLES[myDailyPost.mood]}`}>
                         {myDailyPost.mood}
                     </span>
-                    {/* Hitung total reaksi */}
                     <span className="text-xs text-gray-300 font-medium">
                         {myDailyPost.reactions?.length || 0} Reacts
                     </span>
@@ -220,17 +217,74 @@ export default function Feed() {
 
   if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Checking Frequency...</div>
 
-  // KONDISI 1: LIMIT HABIS (QUOTA REACHED)
+  // RENDER MODAL DETAIL POSTINGAN SENDIRI
+  const renderMyDetailModal = () => {
+    if (!showMyDetail || !myDailyPost) return null
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowMyDetail(false)}>
+            <div className="bg-[#111] border border-white/10 rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-300" onClick={(e) => e.stopPropagation()}>
+                
+                <button 
+                    onClick={() => setShowMyDetail(false)}
+                    className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-white hover:text-black transition"
+                >
+                    &times;
+                </button>
+
+                <div className="relative aspect-[4/5]">
+                    <img src={myDailyPost.image_url} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                    
+                    <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase border backdrop-blur-md ${MOOD_STYLES[myDailyPost.mood]}`}>
+                        {myDailyPost.mood}
+                    </div>
+                </div>
+
+                <div className="p-6 -mt-12 relative z-10">
+                    <p className="text-gray-300 text-sm leading-relaxed mb-6 font-light">
+                        <span className="font-bold text-white mr-2 block text-xs uppercase tracking-widest text-gray-500 mb-1">
+                            Today, {new Date(myDailyPost.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                        "{myDailyPost.caption}"
+                    </p>
+
+                    {/* Stats Reactions */}
+                    <div className="flex gap-2 bg-white/5 p-3 rounded-2xl border border-white/5">
+                        {[
+                           { label: 'Love', emoji: '❤️' },
+                           { label: 'Laugh', emoji: '😂' },
+                           { label: 'Crying', emoji: '😭' },
+                           { label: 'Hug', emoji: '🫂' }
+                        ].map(reaction => {
+                           const count = getReactionCount(myDailyPost.reactions, reaction.label)
+                           return (
+                               <div key={reaction.label} className={`flex-1 flex flex-col items-center p-2 rounded-xl ${count > 0 ? 'bg-white/10 text-white' : 'text-gray-600 grayscale'}`}>
+                                   <span className="text-lg">{reaction.emoji}</span>
+                                   <span className="text-[10px] font-bold mt-1">{count}</span>
+                               </div>
+                           )
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+  }
+
+  // --- KONDISI TAMPILAN UTAMA ---
+
+  // KONDISI 1: LIMIT HABIS
   if (viewCount >= DAILY_VIEW_LIMIT) {
     return (
         <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center space-y-6">
+            {renderMyDetailModal()} {/* Modal harus bisa muncul di sini juga */}
+            
             <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600">10/10</h1>
             <div className="space-y-2">
                 <p className="text-xl font-bold">Cycle Complete.</p>
                 <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
             </div>
             
-            {/* Tampilkan Widget Postingan Saya di sini juga */}
             <UploadSection />
 
             <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN ARCHIVE</button>
@@ -238,10 +292,11 @@ export default function Feed() {
     )
   }
 
-  // KONDISI 2: STOK HABIS (NO MORE SIGNALS)
+  // KONDISI 2: STOK HABIS
   if (currentCardIndex >= posts.length) {
     return (
         <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center">
+            {renderMyDetailModal()}
             
             <UploadSection />
 
@@ -262,6 +317,9 @@ export default function Feed() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white overflow-hidden relative selection:bg-white/20">
+      
+      {/* RENDER MODAL-MODAL DI SINI */}
+      {renderMyDetailModal()}
       
       {showReportModal && (
           <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
@@ -292,20 +350,17 @@ export default function Feed() {
 
       <main className="h-screen w-full flex flex-col items-center justify-center px-4 pt-16 pb-24">
         
-        {/* Floating Mini Card (Hanya muncul jika sudah post) */}
+        {/* Floating Mini Card */}
         {myDailyPost && (
             <div className="absolute top-20 z-40 animate-fade-in-down w-full max-w-xs">
-                 {/* Reuse komponen UploadSection tapi di sini */}
                  <UploadSection />
             </div>
         )}
-        {/* Jika BELUM post, tombol + SHARE sudah dihandle oleh UploadSection di dalam logika render kondisi */}
         {!myDailyPost && (
              <div className="absolute top-20 z-40 animate-fade-in-down w-full max-w-xs">
                 <UploadSection />
              </div>
         )}
-
 
         <div className="relative w-full max-w-sm aspect-[4/5] bg-[#111] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl">
             <img src={post.image_url} className="w-full h-full object-cover" />
