@@ -25,7 +25,10 @@ export default function Feed() {
   const [viewCount, setViewCount] = useState(0) 
   
   const [loading, setLoading] = useState(true)
-  const [hasPostedToday, setHasPostedToday] = useState(false)
+  
+  // STATE BARU: Menyimpan DATA post saya hari ini (bukan cuma status true/false)
+  const [myDailyPost, setMyDailyPost] = useState(null)
+  
   const [showReportModal, setShowReportModal] = useState(false)
 
   const router = useRouter()
@@ -42,16 +45,18 @@ export default function Feed() {
       const { data: profile } = await supabase.from('profiles').select('avatar_url').eq('id', user.id).single()
       if (profile) setUserAvatar(profile.avatar_url)
 
-      await checkPostStatus(user.id)
-      await loadFeedLogic(user.id)
+      await checkMyDailyPost(user.id) // Cek post saya
+      await loadFeedLogic(user.id) // Cek feed orang lain
     }
     init()
   }, [router])
 
-  const checkPostStatus = async (userId) => {
+  // --- 1. UPDATE LOGIC: AMBIL DATA POST SAYA ---
+  const checkMyDailyPost = async (userId) => {
+    // Ambil data lengkap: id, image, mood, reactions
     const { data } = await supabase
       .from('posts')
-      .select('created_at')
+      .select('*, reactions(id)') // Kita hitung jumlah reactionnya
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -60,7 +65,9 @@ export default function Feed() {
     if (data) {
       const postDate = new Date(data.created_at).toDateString()
       const today = new Date().toDateString()
-      if (postDate === today) setHasPostedToday(true)
+      if (postDate === today) {
+        setMyDailyPost(data) // Simpan data post ke state
+      }
     }
   }
 
@@ -98,7 +105,6 @@ export default function Feed() {
       .limit(50)
 
     if (rawPosts) {
-      // Filter: Buang post yang sudah dilihat DAN post milik user sendiri
       let filtered = rawPosts.filter(p => !seenPostIds.includes(p.id) && p.user_id !== userId)
       filtered = filtered.sort(() => Math.random() - 0.5)
       
@@ -163,10 +169,11 @@ export default function Feed() {
     return postReactions.filter(r => r.reaction_value === type).length
   }
 
-  // --- KOMPONEN TOMBOL UPLOAD ---
+  // --- 2. KOMPONEN BARU: MINI CARD ---
   const UploadSection = () => (
-    <div className="mb-8 w-full max-w-xs flex justify-center">
-      {!hasPostedToday ? (
+    <div className="mb-8 w-full max-w-xs flex justify-center z-50">
+      {!myDailyPost ? (
+        // TOMBOL UPLOAD BIASA
         <button 
           onClick={() => router.push('/upload')} 
           className="group relative w-full overflow-hidden rounded-full bg-white py-4 text-black font-black tracking-widest text-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.4)]"
@@ -177,15 +184,32 @@ export default function Feed() {
           </span>
         </button>
       ) : (
-        // --- REVISI TEKS DI SINI ---
-        <div className="px-6 py-4 rounded-2xl bg-white/5 border border-white/10 text-center backdrop-blur-sm w-full">
-            <span className="text-xl mb-1 block animate-pulse">✨</span>
-            <p className="text-sm font-bold text-gray-200 tracking-wider uppercase">
-              YOU HAVE SHARED YOUR TRUTH TODAY
-            </p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] mt-1">
-              See you tomorrow at 00:00
-            </p>
+        // KARTU MINI POSTINGAN SAYA (UPDATE!)
+        <div 
+            onClick={() => router.push('/profile')}
+            className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md w-full cursor-pointer hover:bg-white/5 transition-colors group"
+        >
+            {/* Thumbnail Foto */}
+            <div className="h-12 w-12 rounded-lg overflow-hidden border border-white/10 relative">
+                <img src={myDailyPost.image_url} className="w-full h-full object-cover" />
+                <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-black ${MOOD_STYLES[myDailyPost.mood]?.split(' ')[0] || 'bg-gray-500'}`}></div>
+            </div>
+
+            {/* Info Teks */}
+            <div className="flex-1 text-left">
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">Your Truth Today</p>
+                <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${MOOD_STYLES[myDailyPost.mood]}`}>
+                        {myDailyPost.mood}
+                    </span>
+                    {/* Hitung total reaksi */}
+                    <span className="text-xs text-gray-300 font-medium">
+                        {myDailyPost.reactions?.length || 0} Reacts
+                    </span>
+                </div>
+            </div>
+
+            <div className="text-gray-500 group-hover:text-white transition">→</div>
         </div>
       )}
     </div>
@@ -206,6 +230,7 @@ export default function Feed() {
                 <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
             </div>
             
+            {/* Tampilkan Widget Postingan Saya di sini juga */}
             <UploadSection />
 
             <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN ARCHIVE</button>
@@ -213,7 +238,7 @@ export default function Feed() {
     )
   }
 
-  // KONDISI 2: TIDAK ADA POSTINGAN LAGI (STOK HABIS / KOSONG)
+  // KONDISI 2: STOK HABIS (NO MORE SIGNALS)
   if (currentCardIndex >= posts.length) {
     return (
         <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center">
@@ -267,13 +292,20 @@ export default function Feed() {
 
       <main className="h-screen w-full flex flex-col items-center justify-center px-4 pt-16 pb-24">
         
-        {!hasPostedToday && (
-            <div className="absolute top-20 z-40 animate-fade-in-down">
-                 <button onClick={() => router.push('/upload')} className="bg-white text-black px-5 py-2 rounded-full text-xs font-black tracking-widest shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:scale-105 transition-transform">
-                    + SHARE TRUTH
-                 </button>
+        {/* Floating Mini Card (Hanya muncul jika sudah post) */}
+        {myDailyPost && (
+            <div className="absolute top-20 z-40 animate-fade-in-down w-full max-w-xs">
+                 {/* Reuse komponen UploadSection tapi di sini */}
+                 <UploadSection />
             </div>
         )}
+        {/* Jika BELUM post, tombol + SHARE sudah dihandle oleh UploadSection di dalam logika render kondisi */}
+        {!myDailyPost && (
+             <div className="absolute top-20 z-40 animate-fade-in-down w-full max-w-xs">
+                <UploadSection />
+             </div>
+        )}
+
 
         <div className="relative w-full max-w-sm aspect-[4/5] bg-[#111] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl">
             <img src={post.image_url} className="w-full h-full object-cover" />
