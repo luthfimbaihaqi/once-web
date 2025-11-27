@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
+// GAYA NEON GLOW UNTUK BADGE
 const MOOD_STYLES = {
   'Happy': 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.3)]',
   'Sad': 'bg-blue-500/10 text-blue-500 border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]',
@@ -18,11 +19,15 @@ const DAILY_VIEW_LIMIT = 10
 export default function Feed() {
   const [user, setUser] = useState(null)
   const [userAvatar, setUserAvatar] = useState(null) 
+  
   const [posts, setPosts] = useState([]) 
   const [currentCardIndex, setCurrentCardIndex] = useState(0) 
   const [viewCount, setViewCount] = useState(0) 
+  
   const [loading, setLoading] = useState(true)
+  const [hasPostedToday, setHasPostedToday] = useState(false)
   const [myDailyPost, setMyDailyPost] = useState(null)
+  
   const [showReportModal, setShowReportModal] = useState(false)
   const [showMyDetail, setShowMyDetail] = useState(false)
 
@@ -36,8 +41,10 @@ export default function Feed() {
         return
       }
       setUser(user)
+      
       const { data: profile } = await supabase.from('profiles').select('avatar_url').eq('id', user.id).single()
       if (profile) setUserAvatar(profile.avatar_url)
+
       await checkMyDailyPost(user.id) 
       await loadFeedLogic(user.id) 
     }
@@ -56,7 +63,10 @@ export default function Feed() {
     if (data) {
       const postDate = new Date(data.created_at).toDateString()
       const today = new Date().toDateString()
-      if (postDate === today) setMyDailyPost(data) 
+      if (postDate === today) {
+        setHasPostedToday(true)
+        setMyDailyPost(data) 
+      }
     }
   }
 
@@ -139,7 +149,6 @@ export default function Feed() {
     return postReactions?.filter(r => r.reaction_value === type).length || 0
   }
 
-  // --- KOMPONEN TOMBOL UPLOAD / MINI CARD ---
   const UploadSection = () => (
     <div className="mb-8 w-full max-w-xs flex justify-center z-50">
       {!myDailyPost ? (
@@ -153,7 +162,6 @@ export default function Feed() {
           </span>
         </button>
       ) : (
-        // KARTU MINI (Klik -> Buka Modal Detail)
         <div 
             onClick={() => setShowMyDetail(true)}
             className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md w-full cursor-pointer hover:bg-white/5 transition-colors group"
@@ -179,7 +187,6 @@ export default function Feed() {
     </div>
   )
 
-  // --- KOMPONEN BACKGROUND (Ambient) ---
   const AmbientBackground = () => (
     <>
       <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
@@ -187,17 +194,15 @@ export default function Feed() {
     </>
   )
 
-  // --- KOMPONEN EMPTY STATE (Radar) ---
+  // --- KOMPONEN EMPTY STATE (Update Teks) ---
   const EmptyState = ({ message, subMessage }) => (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
         <AmbientBackground />
         
-        {/* Floating Card Postingan Sendiri (Tetap Muncul) */}
         <div className="absolute top-24 z-50 w-full max-w-xs">
             <UploadSection />
         </div>
 
-        {/* Radar Animation */}
         <div className="relative mb-8 mt-10">
             <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center relative">
                 <div className="absolute inset-0 rounded-full border border-white/5 animate-ping opacity-20"></div>
@@ -217,18 +222,16 @@ export default function Feed() {
                 OPEN ARCHIVE
             </button>
             <button onClick={() => window.location.reload()} className="text-[10px] uppercase tracking-widest text-gray-600 hover:text-white transition-colors py-2">
-                Scan Frequency Again
+                Refresh Feed
             </button>
         </div>
     </div>
   )
 
 
-  // --- RENDER AREA ---
+  if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Checking Frequency...</div>
 
-  if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Initializing Feed...</div>
-
-  // RENDER MODAL DETAIL POSTINGAN SENDIRI
+  // RENDER MODAL DETAIL
   const renderMyDetailModal = () => {
     if (!showMyDetail || !myDailyPost) return null
     return (
@@ -275,14 +278,14 @@ export default function Feed() {
     )
   }
 
-  // KONDISI 2: STOK HABIS
+  // KONDISI 2: STOK HABIS (Updated Text Here!)
   if (currentCardIndex >= posts.length) {
     return (
         <>
             {renderMyDetailModal()}
             <EmptyState 
-                message="Silence Detected" 
-                subMessage="No more signals in your vicinity. Be the voice in the void."
+                message="All Caught Up" 
+                subMessage="The feed is quiet. Time to enjoy the real world."
             />
         </>
     )
@@ -294,10 +297,7 @@ export default function Feed() {
   return (
     <div className="min-h-screen bg-[#050505] text-white overflow-hidden relative selection:bg-white/20">
       
-      {/* Background Ambience */}
       <AmbientBackground />
-
-      {/* RENDER MODAL */}
       {renderMyDetailModal()}
       
       {showReportModal && (
@@ -329,7 +329,6 @@ export default function Feed() {
 
       <main className="h-screen w-full flex flex-col items-center justify-center px-4 pt-16 pb-24 relative z-10">
         
-        {/* Floating Mini Card (Dengan posisi yg lebih rapi) */}
         <div className="absolute top-20 z-40 animate-fade-in-down w-full max-w-xs">
              <UploadSection />
         </div>
