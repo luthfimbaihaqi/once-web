@@ -28,7 +28,6 @@ export default function Feed() {
   const [hasPostedToday, setHasPostedToday] = useState(false)
   const [myDailyPost, setMyDailyPost] = useState(null)
   
-  // STATE BARU: Counter Notifikasi
   const [unreadCount, setUnreadCount] = useState(0)
 
   const [showReportModal, setShowReportModal] = useState(false)
@@ -160,7 +159,36 @@ export default function Feed() {
     return postReactions?.filter(r => r.reaction_value === type).length || 0
   }
 
-  // --- KOMPONEN TOMBOL UPLOAD / MINI CARD ---
+  // --- COMPONENT: HEADER (Sekarang jadi Reusable) ---
+  const Header = () => (
+      <nav className="fixed top-0 w-full px-6 py-4 flex justify-between items-center z-50 mix-blend-difference">
+        <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/notifications')} className="relative group">
+                <span className="text-xl filter drop-shadow-lg group-hover:scale-110 transition">🔔</span>
+                {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                    </span>
+                )}
+            </button>
+            <h1 className="text-xl font-black tracking-tighter">ONCE.</h1>
+        </div>
+        <div className="flex items-center gap-2">
+            {/* Fix: View count mentok di 10/10 agar tidak 11/10 */}
+            <span className="text-xs font-bold text-gray-500">{Math.min(viewCount + 1, DAILY_VIEW_LIMIT)} / {DAILY_VIEW_LIMIT}</span>
+            <button onClick={() => router.push('/profile')} className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold border border-white/20 overflow-hidden">
+                {userAvatar ? (
+                    <img src={userAvatar} className="w-full h-full object-cover" />
+                ) : (
+                    user.email[0].toUpperCase()
+                )}
+            </button>
+        </div>
+      </nav>
+  )
+
+  // --- COMPONENT: UPLOAD SECTION ---
   const UploadSection = () => (
     <div className="mb-8 w-full max-w-xs flex justify-center z-50">
       {!myDailyPost ? (
@@ -199,7 +227,6 @@ export default function Feed() {
     </div>
   )
 
-  // --- KOMPONEN BACKGROUND ---
   const AmbientBackground = () => (
     <>
       <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
@@ -207,44 +234,7 @@ export default function Feed() {
     </>
   )
 
-  // --- KOMPONEN EMPTY STATE ---
-  const EmptyState = ({ message, subMessage }) => (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-        <AmbientBackground />
-        
-        <div className="absolute top-24 z-50 w-full max-w-xs">
-            <UploadSection />
-        </div>
-
-        <div className="relative mb-8 mt-10">
-            <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center relative">
-                <div className="absolute inset-0 rounded-full border border-white/5 animate-ping opacity-20"></div>
-                <div className="absolute inset-2 rounded-full border border-white/5 animate-ping delay-75 opacity-10"></div>
-                <span className="text-2xl opacity-50">📡</span>
-            </div>
-        </div>
-
-        <p className="text-sm font-bold tracking-widest uppercase text-gray-400">{message}</p>
-        <p className="text-xs text-gray-600 mt-2 mb-10 max-w-xs leading-relaxed">{subMessage}</p>
-        
-        <div className="flex flex-col gap-3 w-full max-w-xs z-10">
-            <button 
-                onClick={() => router.push('/profile')} 
-                className="w-full px-6 py-4 rounded-full bg-white text-black font-bold text-xs tracking-[0.2em] hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.1)]"
-            >
-                OPEN ARCHIVE
-            </button>
-            <button onClick={() => window.location.reload()} className="text-[10px] uppercase tracking-widest text-gray-600 hover:text-white transition-colors py-2">
-                Refresh Feed
-            </button>
-        </div>
-    </div>
-  )
-
-
-  if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Initializing Feed...</div>
-
-  // RENDER MODAL DETAIL
+  // --- RENDER MODAL DETAIL ---
   const renderMyDetailModal = () => {
     if (!showMyDetail || !myDailyPost) return null
     return (
@@ -278,41 +268,23 @@ export default function Feed() {
     )
   }
 
-  // KONDISI 1: LIMIT HABIS
-  if (viewCount >= DAILY_VIEW_LIMIT) {
-    return (
-        <>
-            {renderMyDetailModal()}
-            <EmptyState 
-                message="All Caught Up" 
-                subMessage="The feed is quiet. Time to enjoy the real world."
-            />
-        </>
-    )
-  }
+  // --- LOGIKA TAMPILAN UTAMA ---
+  if (!user || loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Checking Frequency...</div>
 
-  // KONDISI 2: STOK HABIS
-  if (currentCardIndex >= posts.length) {
-    return (
-        <>
-            {renderMyDetailModal()}
-            <EmptyState 
-                message="All Caught Up" 
-                subMessage="The feed is quiet. Time to enjoy the real world."
-            />
-        </>
-    )
-  }
-
-  const post = posts[currentCardIndex]
-  const userReaction = post.reactions?.find(r => r.user_id === user.id)?.reaction_value
+  // Siapkan variabel post aktif (jika ada)
+  const isLimitReached = viewCount >= DAILY_VIEW_LIMIT;
+  const isFeedEmpty = currentCardIndex >= posts.length;
+  const post = (!isLimitReached && !isFeedEmpty) ? posts[currentCardIndex] : null;
+  const userReaction = post?.reactions?.find(r => r.user_id === user.id)?.reaction_value;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white overflow-hidden relative selection:bg-white/20">
-      
       <AmbientBackground />
+      <Header /> {/* Header akan SELALU MUNCUL sekarang */}
+      
       {renderMyDetailModal()}
       
+      {/* REPORT MODAL */}
       {showReportModal && (
           <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-[#111] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-[0_0_50px_rgba(255,165,0,0.2)]">
@@ -326,88 +298,87 @@ export default function Feed() {
           </div>
       )}
 
-      {/* HEADER UPDATE: DENGAN NOTIFIKASI */}
-      <nav className="fixed top-0 w-full px-6 py-4 flex justify-between items-center z-50 mix-blend-difference">
-        <div className="flex items-center gap-4">
-            {/* TOMBOL LONCENG NOTIFIKASI */}
-            <button 
-                onClick={() => router.push('/notifications')}
-                className="relative group"
-            >
-                <span className="text-xl filter drop-shadow-lg group-hover:scale-110 transition">🔔</span>
-                {/* Dot Merah */}
-                {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                    </span>
-                )}
-            </button>
+      {/* CONTENT SWITCHER */}
+      {isLimitReached ? (
+          // TAMPILAN 1: LIMIT HABIS
+          <main className="h-screen w-full flex flex-col items-center justify-center p-8 text-center space-y-6 relative z-10">
+              <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600">10/10</h1>
+              <div className="space-y-2">
+                  <p className="text-xl font-bold">Cycle Complete.</p>
+                  <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
+              </div>
+              <div className="w-full max-w-xs"><UploadSection /></div>
+              <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN ARCHIVE</button>
+          </main>
+      ) : isFeedEmpty ? (
+          // TAMPILAN 2: STOK HABIS
+          <main className="h-screen w-full flex flex-col items-center justify-center p-8 text-center relative z-10">
+              <div className="w-full max-w-xs mb-8"><UploadSection /></div>
+              <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center relative mb-8">
+                  <div className="absolute inset-0 rounded-full border border-white/5 animate-ping opacity-20"></div>
+                  <div className="absolute inset-2 rounded-full border border-white/5 animate-ping delay-75 opacity-10"></div>
+                  <span className="text-2xl opacity-50">📡</span>
+              </div>
+              <p className="text-sm font-bold tracking-widest uppercase text-gray-400">All Caught Up</p>
+              <p className="text-xs text-gray-600 mt-2 mb-10 max-w-xs leading-relaxed">The feed is quiet. Time to enjoy the real world.</p>
+              <div className="flex flex-col gap-3 w-full max-w-xs">
+                  <button onClick={() => router.push('/profile')} className="w-full px-6 py-4 rounded-full bg-white text-black font-bold text-xs tracking-[0.2em] hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.1)]">OPEN ARCHIVE</button>
+                  <button onClick={() => window.location.reload()} className="text-[10px] uppercase tracking-widest text-gray-600 hover:text-white transition-colors py-2">Refresh Feed</button>
+              </div>
+          </main>
+      ) : (
+          // TAMPILAN 3: KARTU FEED
+          <>
+              <main className="h-screen w-full flex flex-col items-center justify-center px-4 pt-16 pb-24 relative z-10">
+                  <div className="absolute top-16 z-40 animate-fade-in-down w-full max-w-xs">
+                      <UploadSection />
+                  </div>
 
-            <h1 className="text-xl font-black tracking-tighter">ONCE.</h1>
-        </div>
+                  <div className="relative w-full max-w-sm aspect-[4/5] bg-[#111] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl">
+                      <img src={post.image_url} className="w-full h-full object-cover" />
+                      <button onClick={(e) => { e.stopPropagation(); setShowReportModal(true); }} className="absolute top-4 left-4 z-20 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-red-500 hover:bg-black/50 transition border border-white/10" title="Report">⚠️</button>
 
-        <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-500">{viewCount + 1} / {DAILY_VIEW_LIMIT}</span>
-            <button onClick={() => router.push('/profile')} className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold border border-white/20 overflow-hidden">
-                {userAvatar ? (
-                    <img src={userAvatar} className="w-full h-full object-cover" />
-                ) : (
-                    user.email[0].toUpperCase()
-                )}
-            </button>
-        </div>
-      </nav>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent flex flex-col justify-end p-6 pointer-events-none">
+                          <div className="absolute top-4 left-0 right-4 flex justify-end items-start pointer-events-auto">
+                              <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border backdrop-blur-md ${MOOD_STYLES[post.mood]}`}>{post.mood}</div>
+                          </div>
 
-      <main className="h-screen w-full flex flex-col items-center justify-center px-4 pt-16 pb-24 relative z-10">
-        
-        <div className="absolute top-20 z-40 animate-fade-in-down w-full max-w-xs">
-             <UploadSection />
-        </div>
+                          <div className="pointer-events-auto">
+                              <div className="flex items-center gap-2 mb-2">
+                                  <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[10px] border border-white/20 overflow-hidden">
+                                      {post.profiles?.avatar_url ? (
+                                          <img src={post.profiles.avatar_url} className="w-full h-full object-cover" />
+                                      ) : (
+                                          post.profiles?.username?.[0].toUpperCase()
+                                      )}
+                                  </div>
+                                  <span className="text-xs font-bold tracking-wide text-gray-300">{post.profiles?.username}</span>
+                              </div>
 
-        <div className="relative w-full max-w-sm aspect-[4/5] bg-[#111] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl">
-            <img src={post.image_url} className="w-full h-full object-cover" />
-            <button onClick={(e) => { e.stopPropagation(); setShowReportModal(true); }} className="absolute top-4 left-4 z-20 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-red-500 hover:bg-black/50 transition border border-white/10" title="Report">⚠️</button>
+                              <p className="text-sm font-light text-gray-200 leading-relaxed mb-6 drop-shadow-md">{post.caption}</p>
 
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent flex flex-col justify-end p-6 pointer-events-none">
-                <div className="absolute top-4 left-0 right-4 flex justify-end items-start pointer-events-auto">
-                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border backdrop-blur-md ${MOOD_STYLES[post.mood]}`}>{post.mood}</div>
-                </div>
+                              <div className="flex gap-2 mb-4">
+                                  {[{ label: 'Love', emoji: '❤️' }, { label: 'Laugh', emoji: '😂' }, { label: 'Crying', emoji: '😭' }, { label: 'Hug', emoji: '🫂' }].map((reaction) => {
+                                      const count = getReactionCount(post.reactions || [], reaction.label)
+                                      const isActive = userReaction === reaction.label
+                                      return (
+                                        <button key={reaction.label} onClick={(e) => { e.stopPropagation(); handleReaction(post.id, reaction.label); }} className={`flex-1 py-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/5 transition-all active:scale-95 ${isActive ? 'bg-white text-black border-white' : 'hover:bg-white/20'}`}>
+                                            <span className={isActive ? 'scale-125 inline-block' : 'grayscale'}>{reaction.emoji}</span>
+                                            {count > 0 && <span className="ml-1 text-[10px] font-bold">{count}</span>}
+                                        </button>
+                                      )
+                                  })}
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              </main>
 
-                <div className="pointer-events-auto">
-                    <div className="flex items-center gap-2 mb-2">
-                         <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[10px] border border-white/20 overflow-hidden">
-                            {post.profiles?.avatar_url ? (
-                                <img src={post.profiles.avatar_url} className="w-full h-full object-cover" />
-                            ) : (
-                                post.profiles?.username?.[0].toUpperCase()
-                            )}
-                         </div>
-                         <span className="text-xs font-bold tracking-wide text-gray-300">{post.profiles?.username}</span>
-                    </div>
-
-                    <p className="text-sm font-light text-gray-200 leading-relaxed mb-6 drop-shadow-md">{post.caption}</p>
-
-                    <div className="flex gap-2 mb-4">
-                         {[{ label: 'Love', emoji: '❤️' }, { label: 'Laugh', emoji: '😂' }, { label: 'Crying', emoji: '😭' }, { label: 'Hug', emoji: '🫂' }].map((reaction) => {
-                            const count = getReactionCount(post.reactions || [], reaction.label)
-                            const isActive = userReaction === reaction.label
-                            return (
-                              <button key={reaction.label} onClick={(e) => { e.stopPropagation(); handleReaction(post.id, reaction.label); }} className={`flex-1 py-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/5 transition-all active:scale-95 ${isActive ? 'bg-white text-black border-white' : 'hover:bg-white/20'}`}>
-                                 <span className={isActive ? 'scale-125 inline-block' : 'grayscale'}>{reaction.emoji}</span>
-                                 {count > 0 && <span className="ml-1 text-[10px] font-bold">{count}</span>}
-                              </button>
-                            )
-                          })}
-                    </div>
-                </div>
-            </div>
-        </div>
-      </main>
-
-      <div className="fixed bottom-8 w-full flex justify-center z-50 px-4">
-         <button onClick={handleNextPost} className="w-full max-w-sm bg-white text-black font-black py-4 rounded-full shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95 transition-all duration-300 tracking-widest">NEXT TRUTH →</button>
-      </div>
+              <div className="fixed bottom-8 w-full flex justify-center z-50 px-4">
+                  <button onClick={handleNextPost} className="w-full max-w-sm bg-white text-black font-black py-4 rounded-full shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95 transition-all duration-300 tracking-widest">NEXT TRUTH →</button>
+              </div>
+          </>
+      )}
     </div>
   )
 }
