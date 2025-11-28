@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
-// WARNA GRADASI UNTUK VIBE CARD (LEBIH VIBRANT)
+// WARNA GRADASI UNTUK VIBE CARD
 const VIBE_CARD_STYLES = {
   'Happy': 'from-yellow-900/40 to-black border-yellow-500/30',
   'Sad': 'from-blue-900/40 to-black border-blue-500/30',
@@ -14,6 +14,7 @@ const VIBE_CARD_STYLES = {
   'FlatFace': 'from-slate-800/40 to-black border-slate-500/30',
 }
 
+// WARNA BULATAN KALENDER
 const MOOD_COLORS = {
   'Happy': 'bg-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]',
   'Sad': 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]',
@@ -22,6 +23,28 @@ const MOOD_COLORS = {
   'Gloomy': 'bg-gray-400 shadow-[0_0_10px_rgba(156,163,175,0.5)]',
   'Boring': 'bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.5)]',
   'FlatFace': 'bg-slate-500 shadow-[0_0_10px_rgba(100,116,139,0.5)]',
+}
+
+// WARNA GARIS KONEKTOR STREAK
+const MOOD_LINE_COLORS = {
+  'Happy': 'bg-yellow-400/50',
+  'Sad': 'bg-blue-500/50',
+  'InLove': 'bg-pink-500/50',
+  'Angry': 'bg-red-500/50',
+  'Gloomy': 'bg-gray-400/50',
+  'Boring': 'bg-orange-400/50',
+  'FlatFace': 'bg-slate-500/50',
+}
+
+// WARNA CINCIN AVATAR (SOLID)
+const MOOD_RING_COLORS = {
+  'Happy': 'border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.3)]',
+  'Sad': 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]',
+  'InLove': 'border-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.3)]',
+  'Angry': 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]',
+  'Gloomy': 'border-gray-400 shadow-[0_0_20px_rgba(156,163,175,0.3)]',
+  'Boring': 'border-orange-400 shadow-[0_0_20px_rgba(251,146,60,0.3)]',
+  'FlatFace': 'border-slate-500 shadow-[0_0_20px_rgba(100,116,139,0.3)]',
 }
 
 const MOOD_STYLES_BADGE = {
@@ -86,6 +109,69 @@ const MOOD_ADVICE_POOL = {
   ],
 }
 
+// --- COMPONENT: Ambient Background ---
+const AmbientBackground = () => (
+    <>
+      <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] right-[-20%] w-[70%] h-[70%] rounded-full bg-blue-900/10 blur-[120px] animate-pulse-slow delay-1000 pointer-events-none"></div>
+    </>
+)
+
+// --- COMPONENT: SKELETON LOADER (New Premium Loading State) ---
+const ProfileSkeleton = () => {
+    return (
+        <div className="min-h-screen bg-[#050505] text-white pb-10 font-sans relative">
+            <AmbientBackground />
+            <div className="max-w-md mx-auto min-h-screen bg-[#050505] border-x border-white/5 relative">
+                {/* Header Skeleton */}
+                <header className="p-6 flex justify-between items-center sticky top-0 bg-[#050505]/80 backdrop-blur-md z-40">
+                    <div className="w-10 h-10 rounded-full bg-white/5 animate-pulse"></div>
+                    <div className="w-20 h-4 bg-white/5 rounded animate-pulse"></div>
+                    <div className="w-6 h-6 bg-white/5 rounded animate-pulse"></div>
+                </header>
+
+                {/* Profile Info Skeleton */}
+                <section className="flex flex-col items-center pt-6 pb-8">
+                     <div className="w-28 h-28 rounded-full bg-white/5 animate-pulse mb-4"></div>
+                     <div className="w-32 h-6 bg-white/5 rounded animate-pulse mb-2"></div>
+                     <div className="w-48 h-4 bg-white/5 rounded animate-pulse mb-6"></div>
+                     <div className="w-24 h-8 bg-white/5 rounded-full animate-pulse mb-8"></div>
+                     <div className="flex gap-8">
+                         <div className="flex flex-col items-center gap-1">
+                             <div className="w-8 h-6 bg-white/5 rounded animate-pulse"></div>
+                             <div className="w-12 h-3 bg-white/5 rounded animate-pulse"></div>
+                         </div>
+                         <div className="flex flex-col items-center gap-1">
+                             <div className="w-8 h-6 bg-white/5 rounded animate-pulse"></div>
+                             <div className="w-12 h-3 bg-white/5 rounded animate-pulse"></div>
+                         </div>
+                     </div>
+                </section>
+
+                {/* Calendar Skeleton */}
+                <section className="px-6 mb-8">
+                    <div className="bg-white/5 p-5 rounded-3xl h-24 animate-pulse"></div>
+                </section>
+
+                {/* Vibe Card Skeleton */}
+                <section className="px-6 mb-8">
+                    <div className="bg-white/5 h-32 rounded-3xl animate-pulse"></div>
+                </section>
+
+                {/* Grid Skeleton */}
+                <section className="px-0.5">
+                    <div className="flex justify-center mb-6"><div className="w-32 h-3 bg-white/5 rounded animate-pulse"></div></div>
+                    <div className="grid grid-cols-3 gap-0.5">
+                        {[1, 2, 3, 4, 5, 6].map(i => (
+                            <div key={i} className="aspect-square bg-white/5 animate-pulse"></div>
+                        ))}
+                    </div>
+                </section>
+            </div>
+        </div>
+    )
+}
+
 export default function Profile() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null) 
@@ -96,10 +182,10 @@ export default function Profile() {
   const [selectedPost, setSelectedPost] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const [editForm, setEditForm] = useState({ username: '', bio: '', avatarFile: null, avatarPreview: null })
   const [saving, setSaving] = useState(false)
-  const fileInputRef = useRef(null)
 
   const router = useRouter()
 
@@ -111,8 +197,13 @@ export default function Profile() {
         return
       }
       setUser(user)
-      fetchProfileData(user.id) 
-      fetchMyPosts(user.id)
+      // Jalankan paralel agar lebih cepat
+      await Promise.all([
+          fetchProfileData(user.id),
+          fetchMyPosts(user.id)
+      ])
+      // Set loading false hanya setelah semua data ditarik
+      setLoading(false)
     }
     getData()
   }, [router])
@@ -131,7 +222,6 @@ export default function Profile() {
       setMyPosts(data)
       generateStats(data)
     }
-    setLoading(false)
   }
 
   const generateStats = (posts) => {
@@ -261,19 +351,32 @@ export default function Profile() {
     return reactions?.filter(r => r.reaction_value === type).length || 0
   }
 
-  // --- COMPONENT: Ambient Background ---
-  const AmbientBackground = () => (
-    <>
-      <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
-      <div className="absolute bottom-[-20%] right-[-20%] w-[70%] h-[70%] rounded-full bg-blue-900/10 blur-[120px] animate-pulse-slow delay-1000 pointer-events-none"></div>
-    </>
-  )
+  // JIKA LOADING, TAMPILKAN SKELETON (BUKAN TEKS BIASA)
+  if (loading) return <ProfileSkeleton />
 
-  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>
+  // GET LATEST POST MOOD for Avatar Ring
+  const latestMood = myPosts.length > 0 ? myPosts[0].mood : null;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white pb-10 font-sans relative selection:bg-white/20">
       <AmbientBackground />
+
+      {/* SETTINGS MODAL */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowSettings(false)}>
+            <div className="bg-[#111] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-white tracking-wide">Settings</h3>
+                <div className="flex flex-col gap-3 pt-2">
+                    <button onClick={handleLogout} className="w-full py-3 rounded-xl bg-red-900/20 text-red-500 border border-red-500/20 font-bold hover:bg-red-500 hover:text-white transition">
+                        Log Out
+                    </button>
+                    <button onClick={() => setShowSettings(false)} className="w-full py-3 rounded-xl bg-white/5 text-gray-400 font-medium hover:bg-white/10 transition">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* EDIT MODAL */}
       {isEditing && (
@@ -282,7 +385,6 @@ export default function Profile() {
                 <button onClick={() => setIsEditing(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">&times;</button>
                 <h3 className="text-xl font-bold mb-6 text-center">Edit Profile</h3>
                 <div className="space-y-6">
-                    {/* AVATAR UPLOAD (LABEL METHOD) */}
                     <div className="flex flex-col items-center gap-3">
                         <label htmlFor="avatar-upload-input" className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-dashed border-gray-600 group cursor-pointer bg-gray-800 active:scale-95 transition-transform">
                             {editForm.avatarPreview ? (
@@ -362,16 +464,20 @@ export default function Profile() {
         <header className="p-6 flex justify-between items-center sticky top-0 bg-[#050505]/80 backdrop-blur-md z-40">
           <button onClick={() => router.push('/feed')} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition">&larr;</button>
           <span className="font-bold tracking-widest text-sm">PROFILE</span>
-          <button onClick={handleLogout} className="text-xs text-gray-500 hover:text-red-500 transition">LOGOUT</button>
+          {/* GEAR ICON BUTTON */}
+          <button onClick={() => setShowSettings(true)} className="text-gray-400 hover:text-white transition p-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
         </header>
 
-        {/* PROFILE INFO & AVATAR (DENGAN GLOW) */}
+        {/* PROFILE INFO & AVATAR (ACTIVE RING) */}
         <section className="flex flex-col items-center pt-6 pb-8 relative group">
           <div className="relative">
               {/* Glow Effect di belakang Avatar */}
               <div className="absolute inset-0 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-full blur-xl opacity-30 group-hover:opacity-50 transition duration-700"></div>
               
-              <div className="relative w-28 h-28 rounded-full p-[2px] bg-gradient-to-br from-white/20 to-white/5 overflow-hidden">
+              {/* AVATAR DENGAN SOLID MOOD BORDER */}
+              <div className={`relative w-28 h-28 rounded-full border-[3px] transition-all duration-500 overflow-hidden ${latestMood ? MOOD_RING_COLORS[latestMood] : 'border-white/10'}`}>
                 <div className="w-full h-full bg-black rounded-full overflow-hidden flex items-center justify-center">
                     {(profile?.avatar_url || user?.email) ? (
                         <img src={profile?.avatar_url} className="w-full h-full object-cover" onError={(e) => e.target.style.display='none'} />
@@ -403,18 +509,26 @@ export default function Profile() {
           </div>
         </section>
 
-        {/* MOOD CALENDAR (IMPROVED UI) */}
+        {/* MOOD CALENDAR (GRID LAYOUT + STREAK CONNECTOR) */}
         <section className="px-6 mb-8">
-          <div className="flex justify-between items-end bg-white/5 p-5 rounded-3xl border border-white/5 relative overflow-hidden">
-            {/* Background Glow Halus */}
+          <div className="bg-white/5 p-5 rounded-3xl border border-white/5 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
             
-            {stats.calendar.map((day, idx) => (
-              <div key={idx} className={`flex flex-col items-center gap-3 relative z-10 ${day.isFuture ? 'opacity-20' : 'opacity-100'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${day.mood ? `${MOOD_COLORS[day.mood]} scale-110` : 'bg-white/5 border border-white/10'}`}></div>
-                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{day.dayShort}</span>
-              </div>
-            ))}
+            {/* GRID LAYOUT UNTUK POSISI PRESISI */}
+            <div className="grid grid-cols-7 gap-0 relative z-10">
+              {stats.calendar.map((day, idx) => (
+                <div key={idx} className={`relative flex flex-col items-center gap-3 ${day.isFuture ? 'opacity-20' : 'opacity-100'}`}>
+                  
+                  {/* STREAK CONNECTOR LINE (Render jika hari ini ada mood DAN hari berikutnya juga ada) */}
+                  {idx < 6 && day.mood && stats.calendar[idx + 1].mood && (
+                      <div className={`absolute top-4 left-1/2 w-full h-[2px] -z-10 ${MOOD_LINE_COLORS[day.mood]}`}></div>
+                  )}
+
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 z-10 ${day.mood ? `${MOOD_COLORS[day.mood]} scale-110` : 'bg-white/5 border border-white/10'}`}></div>
+                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{day.dayShort}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -429,18 +543,19 @@ export default function Profile() {
           </section>
         )}
 
-        {/* ARCHIVE GRID */}
-        <section className="px-1 pb-12">
-          <div className="flex items-center justify-between px-5 mb-4">
-             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Archive</h3>
-             <span className="text-[10px] text-gray-600">Tap to expand</span>
+        {/* YOUR MOMENTS GRID (ACTIVE ANIMATION) */}
+        <section className="px-0.5 pb-24">
+          <div className="flex items-center justify-center py-6">
+             <span className="w-1 h-1 rounded-full bg-white/20 mr-4"></span>
+             <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Your Moments</h3>
+             <span className="w-1 h-1 rounded-full bg-white/20 ml-4"></span>
           </div>
           <div className="grid grid-cols-3 gap-0.5">
             {myPosts.length === 0 ? (
-               <div className="col-span-3 py-20 text-center text-gray-600 text-xs tracking-widest uppercase border border-dashed border-white/10 rounded-2xl mx-4 mt-2">No memories yet</div>
+               <div className="col-span-3 py-20 text-center text-gray-600 text-xs tracking-widest uppercase border border-dashed border-white/10 rounded-2xl mx-4 mt-2">No moments yet</div>
             ) : (
               myPosts.map((post) => (
-                <div key={post.id} onClick={() => setSelectedPost(post)} className="relative aspect-square group cursor-pointer overflow-hidden bg-white/5">
+                <div key={post.id} onClick={() => setSelectedPost(post)} className="relative aspect-square group cursor-pointer overflow-hidden bg-white/5 active:scale-95 transition-transform duration-200">
                   <img src={post.image_url} className="w-full h-full object-cover transition duration-500 group-hover:scale-110 group-hover:opacity-80" />
                   <div className={`absolute bottom-1.5 right-1.5 w-2 h-2 rounded-full ${MOOD_COLORS[post.mood]}`}></div>
                 </div>
