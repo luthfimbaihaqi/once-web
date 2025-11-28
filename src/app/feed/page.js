@@ -44,6 +44,69 @@ function timeAgo(iso) {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
+// --- COMPONENT: Ambient Background ---
+const AmbientBackground = () => (
+    <>
+      <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] right-[-20%] w-[70%] h-[70%] rounded-full bg-blue-900/10 blur-[120px] animate-pulse-slow delay-1000 pointer-events-none"></div>
+    </>
+)
+
+// --- COMPONENT: SKELETON FEED (Premium Loading State) ---
+const FeedSkeleton = () => {
+    return (
+        <div className="min-h-screen bg-black relative overflow-hidden flex flex-col items-center">
+            <AmbientBackground />
+            
+            {/* Header Skeleton */}
+            <nav className="fixed top-0 w-full px-6 py-4 flex justify-between items-center z-50">
+                <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-white/5 animate-pulse"></div>
+                    <div className="w-16 h-5 rounded bg-white/5 animate-pulse"></div>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="flex flex-col items-end gap-1">
+                        <div className="w-12 h-2 rounded bg-white/5 animate-pulse"></div>
+                        <div className="w-20 h-1 rounded-full bg-white/5 animate-pulse"></div>
+                    </div>
+                    <div className="w-9 h-9 rounded-full bg-white/5 animate-pulse"></div>
+                </div>
+            </nav>
+
+            {/* Main Card Skeleton */}
+            <main className="min-h-[100dvh] w-full flex flex-col items-center justify-center px-4 pt-28 pb-48 gap-6 relative z-10">
+                <div className="relative w-full max-w-sm aspect-[4/5] bg-white/5 rounded-[2rem] border border-white/5 flex flex-col justify-end p-6 animate-pulse">
+                    {/* Fake Content Inside Card */}
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-full bg-white/10"></div>
+                        <div className="flex flex-col gap-2">
+                             <div className="w-24 h-3 rounded bg-white/10"></div>
+                             <div className="w-16 h-2 rounded bg-white/10"></div>
+                        </div>
+                    </div>
+                    <div className="w-full h-4 rounded bg-white/10 mb-2"></div>
+                    <div className="w-3/4 h-4 rounded bg-white/10 mb-6"></div>
+                    
+                    {/* Fake Reactions */}
+                    <div className="flex gap-2">
+                        {[1,2,3,4].map(i => (
+                            <div key={i} className="flex-1 h-12 rounded-xl bg-white/10"></div>
+                        ))}
+                    </div>
+                </div>
+            </main>
+
+            {/* Bottom Button Skeleton */}
+            <div className="fixed bottom-8 w-full flex justify-center z-50 px-4">
+                <div className="max-w-sm w-full flex flex-col items-center gap-3">
+                     <div className="w-32 h-2 rounded bg-white/5 animate-pulse"></div>
+                     <div className="w-full h-14 rounded-full bg-white/10 animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export default function Feed() {
   const [user, setUser] = useState(null)
   const [userAvatar, setUserAvatar] = useState(null)
@@ -56,7 +119,7 @@ export default function Feed() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [showReportModal, setShowReportModal] = useState(false)
   const [showMyDetail, setShowMyDetail] = useState(false)
-  const [processingNext, setProcessingNext] = useState(false) // Mencegah double click
+  const [processingNext, setProcessingNext] = useState(false)
 
   const router = useRouter()
 
@@ -77,10 +140,11 @@ export default function Feed() {
 
       setUnreadCount(count || 0)
 
-      await checkMyDailyPost(user.id)
-      
-      // LOGIC FIX: Load posts with seen filtering
-      await loadFeedLogic(user.id)
+      // Jalankan paralel
+      await Promise.all([
+          checkMyDailyPost(user.id),
+          loadFeedLogic(user.id)
+      ])
     }
 
     init()
@@ -106,7 +170,7 @@ export default function Feed() {
   }
 
   const loadFeedLogic = async (userId) => {
-    setLoading(true)
+    // setLoading(true) // Removed to prevent double flicker, initial state is true
 
     // 1. Get Seen Posts for TODAY
     const today = new Date()
@@ -123,7 +187,6 @@ export default function Feed() {
 
     setViewCount(seenCount)
 
-    // Jika limit sudah tercapai, tidak perlu fetch posts berat-berat
     if (seenCount >= DAILY_VIEW_LIMIT) {
       setPosts([])
       setLoading(false)
@@ -134,9 +197,9 @@ export default function Feed() {
     let query = supabase
       .from('posts')
       .select(`*, profiles ( username, avatar_url ), reactions ( user_id, reaction_value )`)
-      .neq('user_id', userId) // Jangan ambil post sendiri
+      .neq('user_id', userId) 
       .order('created_at', { ascending: false })
-      .limit(30) // Ambil cukup banyak untuk buffer
+      .limit(30) 
 
     if (seenPostIds.length > 0) {
       query = query.not('id', 'in', `(${seenPostIds.join(',')})`)
@@ -156,7 +219,6 @@ export default function Feed() {
     if (!user) return
     const currentPost = posts[currentCardIndex]
 
-    // Jika tidak ada post (misal error), force next saja visualnya
     if (!currentPost) {
         setCurrentCardIndex(prev => prev + 1)
         return
@@ -165,20 +227,17 @@ export default function Feed() {
     setProcessingNext(true)
 
     try {
-      // 1. Catat ke database bahwa post ini sudah dilihat
       await supabase.from('seen_posts').insert({
         user_id: user.id,
         post_id: currentPost.id,
         viewed_at: new Date().toISOString()
       })
 
-      // 2. Update state lokal
       setViewCount(prev => prev + 1)
       setCurrentCardIndex(prev => prev + 1)
 
     } catch (error) {
       console.error('Error recording view:', error)
-      // Tetap lanjut next agar UX tidak macet
       setCurrentCardIndex(prev => prev + 1)
     } finally {
       setProcessingNext(false)
@@ -187,6 +246,7 @@ export default function Feed() {
 
   const post = posts[currentCardIndex]
 
+  // --- HEADER WITH PROGRESS BAR ---
   const Header = () => (
     <nav className="fixed top-0 w-full px-6 py-4 flex justify-between items-center z-50 backdrop-blur-md bg-gradient-to-b from-black/80 to-transparent">
       {/* KIRI: Logo & Notif */}
@@ -206,7 +266,7 @@ export default function Feed() {
       {/* KANAN: Status Limit & Profile */}
       <div className="flex items-center gap-4">
         
-        {/* COMPONENT BARU: Visual Limit Indicator */}
+        {/* Visual Limit Indicator */}
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center gap-2">
             <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-500">Daily Limit</span>
@@ -274,13 +334,6 @@ export default function Feed() {
     </div>
   )
 
-  const AmbientBackground = () => (
-    <>
-      <div className="absolute top-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/8 blur-[120px] animate-pulse-slow pointer-events-none"></div>
-      <div className="absolute bottom-[-20%] right-[-20%] w-[70%] h-[70%] rounded-full bg-blue-900/8 blur-[120px] animate-pulse-slow delay-1000 pointer-events-none"></div>
-    </>
-  )
-
   const renderMyDetailModal = () => {
     if (!showMyDetail || !myDailyPost) return null
     return (
@@ -314,9 +367,9 @@ export default function Feed() {
     )
   }
 
-  if (!user || loading) return <div className="min-h-screen bg-black flex items-center justify-center text-gray-500">Loading...</div>
+  // USE SKELETON INSTEAD OF TEXT
+  if (!user || loading) return <FeedSkeleton />
 
-  // Kondisi limit: viewCount >= 10 ATAU tidak ada lagi post yang bisa diambil
   const isLimitReached = viewCount >= DAILY_VIEW_LIMIT;
   const isFeedEmpty = !isLimitReached && currentCardIndex >= posts.length;
   const userReaction = post?.reactions?.find(r => r.user_id === user.id)?.reaction_value;
@@ -334,20 +387,26 @@ export default function Feed() {
             <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
           </div>
           <div className="w-full max-w-xs"><UploadSection /></div>
-          <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN ARCHIVE</button>
+          {/* UPDATED TO MOMENTS */}
+          <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN MOMENTS</button>
         </main>
       ) : isFeedEmpty ? (
         <main className="h-screen w-full flex flex-col items-center justify-center p-8 text-center relative z-10">
           <div className="w-full max-w-xs mb-8"><UploadSection /></div>
-          <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center relative mb-8">
+          
+          {/* UPDATED RADAR WITH GLOW */}
+          <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center relative mb-8 shadow-[0_0_30px_rgba(255,255,255,0.15)]">
+            <div className="absolute inset-0 bg-white/5 blur-xl rounded-full"></div>
             <div className="absolute inset-0 rounded-full border border-white/5 animate-ping opacity-20"></div>
             <div className="absolute inset-2 rounded-full border border-white/5 animate-ping delay-75 opacity-10"></div>
-            <span className="text-2xl opacity-50">📡</span>
+            <span className="text-2xl opacity-50 relative z-10">📡</span>
           </div>
+
           <p className="text-sm font-bold tracking-widest uppercase text-gray-400">All Caught Up</p>
           <p className="text-xs text-gray-600 mt-2 mb-10 max-w-xs leading-relaxed">The feed is quiet. Time to enjoy the real world.</p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
-            <button onClick={() => router.push('/profile')} className="w-full px-6 py-4 rounded-full bg-white text-black font-bold text-xs tracking-[0.2em] hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.1)]">OPEN ARCHIVE</button>
+            {/* UPDATED BUTTON: MOMENTS + GLOW */}
+            <button onClick={() => router.push('/profile')} className="w-full px-6 py-4 rounded-full bg-white text-black font-bold text-xs tracking-[0.2em] hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.4)]">OPEN MOMENTS</button>
             <button onClick={() => window.location.reload()} className="text-[10px] uppercase tracking-widest text-gray-600 hover:text-white transition-colors py-2">Refresh Feed</button>
           </div>
         </main>
@@ -438,7 +497,6 @@ export default function Feed() {
                 const currentPost = posts[currentCardIndex];
                 if (!user || !currentPost) return;
                 await supabase.from('reports').insert({ reporter_id: user.id, post_id: currentPost.id, reason: 'Inappropriate Content' });
-                // Note: seen_posts is handled by handleNextPost usually, but if reported, we treat as seen/hidden
                 await supabase.from('seen_posts').insert([{ user_id: user.id, post_id: currentPost.id, viewed_at: new Date().toISOString() }]);
                 setShowReportModal(false);
                 setViewCount(prev => prev + 1);
