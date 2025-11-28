@@ -140,11 +140,10 @@ export default function Feed() {
 
       setUnreadCount(count || 0)
 
-      // Jalankan paralel
-      await Promise.all([
-          checkMyDailyPost(user.id),
-          loadFeedLogic(user.id)
-      ])
+      await checkMyDailyPost(user.id)
+      
+      // LOAD FEED LOGIC (TERPISAH COUNTER & FILTER)
+      await loadFeedLogic(user.id)
     }
 
     init()
@@ -170,37 +169,53 @@ export default function Feed() {
   }
 
   const loadFeedLogic = async (userId) => {
-    // 1. Get Seen Posts for TODAY
+    setLoading(true)
+
+    // A. LOGIC 1: Hitung Limit UI (Hanya Reset Tiap 00:00)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     
-    const { data: seenData } = await supabase
+    // Hitung berapa kali lihat post HARI INI
+    const { count: todaySeenCount } = await supabase
       .from('seen_posts')
-      .select('post_id')
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
       .gte('viewed_at', today.toISOString())
 
-    const seenCount = seenData?.length || 0
-    const seenPostIds = seenData?.map(item => item.post_id) || []
+    const currentDailyView = todaySeenCount || 0
+    setViewCount(currentDailyView)
 
-    setViewCount(seenCount)
-
-    if (seenCount >= DAILY_VIEW_LIMIT) {
+    // Jika limit hari ini habis, stop fetch
+    if (currentDailyView >= DAILY_VIEW_LIMIT) {
       setPosts([])
       setLoading(false)
       return
     }
 
-    // 2. Fetch Posts excluding seen ones
+    // B. LOGIC 2: Filter Konten (Exclude SEMUA post yang pernah dilihat kapanpun)
+    // Ambil semua post_id yang pernah dilihat user ini (tanpa batasan waktu)
+    const { data: allSeenData } = await supabase
+      .from('seen_posts')
+      .select('post_id')
+      .eq('user_id', userId)
+
+    const excludePostIds = allSeenData?.map(item => item.post_id) || []
+
+    // C. LOGIC 3: Fetch Feed (Hanya Post 3 Hari Terakhir agar Fresh)
+    const threeDaysAgo = new Date()
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+
     let query = supabase
       .from('posts')
       .select(`*, profiles ( username, avatar_url ), reactions ( user_id, reaction_value )`)
       .neq('user_id', userId) 
+      .gte('created_at', threeDaysAgo.toISOString()) // HANYA AMBIL YG BARU
       .order('created_at', { ascending: false })
       .limit(30) 
 
-    if (seenPostIds.length > 0) {
-      query = query.not('id', 'in', `(${seenPostIds.join(',')})`)
+    // Terapkan filter exclude (NOT IN)
+    if (excludePostIds.length > 0) {
+      query = query.not('id', 'in', `(${excludePostIds.join(',')})`)
     }
 
     const { data: rawPosts } = await query
@@ -242,10 +257,9 @@ export default function Feed() {
     }
   }
 
-  // --- NEW FUNCTION: Handle Profile Click ---
+  // Handle Profile Click
   const handleProfileClick = (targetUserId) => {
       if (!targetUserId) return
-      // Jika user klik foto sendiri (sangat jarang terjadi di feed karena filter, tapi untuk keamanan)
       if (user && targetUserId === user.id) {
           router.push('/profile')
       } else {
@@ -396,6 +410,8 @@ export default function Feed() {
             <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
           </div>
           <div className="w-full max-w-xs"><UploadSection /></div>
+          {/* Tagline dipindah ke sini */}
+          <div className="text-[10px] uppercase tracking-widest text-gray-500">another life, another day</div>
           <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN MOMENTS</button>
         </main>
       ) : isFeedEmpty ? (
@@ -412,6 +428,8 @@ export default function Feed() {
           <p className="text-sm font-bold tracking-widest uppercase text-gray-400">All Caught Up</p>
           <p className="text-xs text-gray-600 mt-2 mb-10 max-w-xs leading-relaxed">The feed is quiet. Time to enjoy the real world.</p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
+            {/* Tagline dipindah ke sini juga (di atas tombol utama) */}
+            <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">another life, another day</div>
             <button onClick={() => router.push('/profile')} className="w-full px-6 py-4 rounded-full bg-white text-black font-bold text-xs tracking-[0.2em] hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.4)]">OPEN MOMENTS</button>
             <button onClick={() => window.location.reload()} className="text-[10px] uppercase tracking-widest text-gray-600 hover:text-white transition-colors py-2">Refresh Feed</button>
           </div>
@@ -481,13 +499,11 @@ export default function Feed() {
 
           <div className="fixed bottom-8 w-full flex justify-center z-50 px-4 pointer-events-none">
             <div className="max-w-sm w-full flex flex-col items-center gap-3 pointer-events-auto">
+              {/* TAGLINE DIHAPUS DARI SINI AGAR TIDAK PADAT */}
+              
               {!hasPostedToday && (
                 <UploadSection />
               )}
-
-              <div className="text-[10px] uppercase tracking-widest text-gray-400">
-                another life, another day
-              </div>
 
               <button disabled={processingNext} onClick={handleNextPost} className="w-full bg-gradient-to-r from-white/90 to-white/80 text-black font-black py-4 rounded-full shadow-[0_8px_40px_rgba(255,255,255,0.12)] hover:scale-105 active:scale-95 transition-all duration-300 tracking-widest disabled:opacity-50 disabled:cursor-not-allowed">
                 {processingNext ? '...' : 'NEXT TRUTH →'}
