@@ -170,8 +170,6 @@ export default function Feed() {
   }
 
   const loadFeedLogic = async (userId) => {
-    // setLoading(true) // Removed to prevent double flicker, initial state is true
-
     // 1. Get Seen Posts for TODAY
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -242,6 +240,17 @@ export default function Feed() {
     } finally {
       setProcessingNext(false)
     }
+  }
+
+  // --- NEW FUNCTION: Handle Profile Click ---
+  const handleProfileClick = (targetUserId) => {
+      if (!targetUserId) return
+      // Jika user klik foto sendiri (sangat jarang terjadi di feed karena filter, tapi untuk keamanan)
+      if (user && targetUserId === user.id) {
+          router.push('/profile')
+      } else {
+          router.push(`/profile/${targetUserId}`)
+      }
   }
 
   const post = posts[currentCardIndex]
@@ -387,14 +396,12 @@ export default function Feed() {
             <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
           </div>
           <div className="w-full max-w-xs"><UploadSection /></div>
-          {/* UPDATED TO MOMENTS */}
           <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN MOMENTS</button>
         </main>
       ) : isFeedEmpty ? (
         <main className="h-screen w-full flex flex-col items-center justify-center p-8 text-center relative z-10">
           <div className="w-full max-w-xs mb-8"><UploadSection /></div>
           
-          {/* UPDATED RADAR WITH GLOW */}
           <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center relative mb-8 shadow-[0_0_30px_rgba(255,255,255,0.15)]">
             <div className="absolute inset-0 bg-white/5 blur-xl rounded-full"></div>
             <div className="absolute inset-0 rounded-full border border-white/5 animate-ping opacity-20"></div>
@@ -405,7 +412,6 @@ export default function Feed() {
           <p className="text-sm font-bold tracking-widest uppercase text-gray-400">All Caught Up</p>
           <p className="text-xs text-gray-600 mt-2 mb-10 max-w-xs leading-relaxed">The feed is quiet. Time to enjoy the real world.</p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
-            {/* UPDATED BUTTON: MOMENTS + GLOW */}
             <button onClick={() => router.push('/profile')} className="w-full px-6 py-4 rounded-full bg-white text-black font-bold text-xs tracking-[0.2em] hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.4)]">OPEN MOMENTS</button>
             <button onClick={() => window.location.reload()} className="text-[10px] uppercase tracking-widest text-gray-600 hover:text-white transition-colors py-2">Refresh Feed</button>
           </div>
@@ -433,8 +439,15 @@ export default function Feed() {
                 </div>
 
                 <div className="pointer-events-auto">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[10px] border border-white/20 overflow-hidden">
+                  {/* USER INFO - CLICKABLE */}
+                  <div 
+                    onClick={(e) => { 
+                        e.stopPropagation(); 
+                        handleProfileClick(post.user_id); 
+                    }}
+                    className="flex items-center gap-2 mb-2 cursor-pointer group"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[10px] border border-white/20 overflow-hidden group-hover:border-white transition">
                       {post.profiles?.avatar_url ? (
                         <img src={post.profiles.avatar_url} className="w-full h-full object-cover" />
                       ) : (
@@ -442,7 +455,7 @@ export default function Feed() {
                       )}
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-xs font-bold tracking-wide text-gray-300">{post.profiles?.username}</span>
+                      <span className="text-xs font-bold tracking-wide text-gray-300 group-hover:text-white transition">{post.profiles?.username}</span>
                       <span className="text-[10px] text-gray-500">{timeAgo(post.created_at)}</span>
                     </div>
                   </div>
