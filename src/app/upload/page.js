@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
-// STYLING MOOD (Sama seperti sebelumnya)
+// STYLING TOMBOL MOOD
 const MOOD_SELECTED_STYLES = {
   'Happy': 'bg-yellow-500 text-black shadow-[0_0_25px_rgba(234,179,8,0.6)] border-yellow-400 font-extrabold scale-[1.02]',
   'Sad': 'bg-blue-500 text-white shadow-[0_0_25px_rgba(59,130,246,0.6)] border-blue-400 font-extrabold scale-[1.02]',
@@ -12,6 +12,17 @@ const MOOD_SELECTED_STYLES = {
   'Gloomy': 'bg-gray-500 text-white shadow-[0_0_25px_rgba(156,163,175,0.6)] border-gray-400 font-extrabold scale-[1.02]',
   'Boring': 'bg-orange-500 text-white shadow-[0_0_25px_rgba(249,115,22,0.6)] border-orange-400 font-extrabold scale-[1.02]',
   'FlatFace': 'bg-slate-500 text-white shadow-[0_0_25px_rgba(100,116,139,0.6)] border-slate-400 font-extrabold scale-[1.02]',
+}
+
+// FILTER OVERLAY WARNA (Untuk Preview Foto)
+const MOOD_OVERLAY_CLASSES = {
+  'Happy': 'bg-yellow-500/20 mix-blend-overlay',
+  'Sad': 'bg-blue-500/20 mix-blend-overlay',
+  'InLove': 'bg-pink-500/20 mix-blend-overlay',
+  'Angry': 'bg-red-600/30 mix-blend-overlay',
+  'Gloomy': 'bg-gray-500/20 mix-blend-overlay',
+  'Boring': 'bg-orange-500/20 mix-blend-overlay',
+  'FlatFace': 'bg-slate-500/20 mix-blend-overlay',
 }
 
 const MOOD_BASE_STYLE = 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/30 transition-all duration-300'
@@ -26,29 +37,39 @@ const MOODS = [
   { label: 'FlatFace', emoji: '😶' },
 ]
 
+// --- COMPONENT: Ambient Background ---
+const AmbientBackground = () => (
+    <>
+      <div className="absolute top-[-20%] right-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-blue-900/10 blur-[120px] animate-pulse-slow delay-1000 pointer-events-none"></div>
+    </>
+)
+
 export default function UploadPage() {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [caption, setCaption] = useState('')
   const [mood, setMood] = useState('')
-  const [loading, setLoading] = useState(false)
   
-  // State untuk Validasi
-  const [checkingLimit, setCheckingLimit] = useState(true) 
+  // Loading States
+  const [loading, setLoading] = useState(false)
+  const [checkingLimit, setCheckingLimit] = useState(true)
+  const [limitReached, setLimitReached] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
   const router = useRouter()
 
-  // --- 1. CEK OTORITAS & LIMIT SAAT HALAMAN DIMUAT ---
+  // --- 1. VALIDASI LIMIT (On Mount) ---
   useEffect(() => {
     const validateAccess = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
-        router.push('/') // Belum login? Out.
+        router.push('/') 
         return
       }
 
-      // Cek apakah sudah posting hari ini?
+      // Cek postingan hari ini
       const { data } = await supabase
         .from('posts')
         .select('created_at')
@@ -62,15 +83,13 @@ export default function UploadPage() {
         const today = new Date().toDateString()
         
         if (postDate === today) {
-          // JIKA SUDAH POSTING HARI INI -> TENDANG BALIK KE FEED
-          alert("You have already shared your truth today. Come back tomorrow.")
-          router.push('/feed')
+          setLimitReached(true) // Tampilkan layar "Mission Accomplished"
+          setCheckingLimit(false)
           return
         }
       }
       
-      // Jika lolos, hentikan loading dan izinkan akses
-      setCheckingLimit(false)
+      setCheckingLimit(false) // Lanjut ke form upload
     }
 
     validateAccess()
@@ -81,25 +100,21 @@ export default function UploadPage() {
   const handleFileChange = (e) => {
     const selected = e.target.files[0]
     if (!selected) return
-    // if (!selected.type.startsWith('image/')) {
-    //   alert('Please select an image file!')
-    //   return
-    // }
     setFile(selected)
     setPreview(URL.createObjectURL(selected))
+    setErrorMsg('') // Clear error jika ada
   }
 
   const handleUpload = async () => {
-    if (!file || !mood) {
-      alert('Please select a photo and a mood!')
-      return
-    }
+    if (!file || !mood) return
     setLoading(true)
+    setErrorMsg('')
+
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('User not found')
 
-      // Double Check (Pencegahan Terakhir sebelum Insert)
+      // Double Check Limit (Prevent Race Condition)
       const { data: check } = await supabase
         .from('posts')
         .select('created_at')
@@ -128,24 +143,60 @@ export default function UploadPage() {
       router.push('/feed')
     } catch (error) {
       console.error(error)
-      alert('Upload failed: ' + error.message)
-      if (error.message === "Daily limit reached.") router.push('/feed')
+      if (error.message === "Daily limit reached.") {
+          setLimitReached(true)
+      } else {
+          setErrorMsg(error.message || 'Upload failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  // JIKA SEDANG CEK LIMIT, TAMPILKAN LOADING HITAM (JANGAN KASIH LIHAT FORM)
+  // --- STATE 1: LOADING / CHECKING LIMIT ---
   if (checkingLimit) {
-      return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 tracking-widest text-xs uppercase animate-pulse">Checking Limit...</div>
+      return (
+        <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-white relative overflow-hidden">
+            <AmbientBackground />
+            <div className="w-16 h-16 rounded-full border border-white/10 flex items-center justify-center relative mb-6">
+                <div className="absolute inset-0 rounded-full border border-white/5 animate-ping opacity-20"></div>
+                <div className="absolute inset-2 rounded-full border border-white/5 animate-ping delay-75 opacity-10"></div>
+                <span className="text-xl opacity-50">📡</span>
+            </div>
+            <p className="text-gray-500 tracking-[0.3em] text-[10px] uppercase animate-pulse">Establishing Link...</p>
+        </div>
+      )
   }
 
+  // --- STATE 2: LIMIT REACHED (Mission Accomplished) ---
+  if (limitReached) {
+      return (
+        <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-white relative overflow-hidden px-6 text-center">
+            <AmbientBackground />
+            
+            <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(34,197,94,0.2)] border border-green-500/20">
+                <span className="text-3xl">✅</span>
+            </div>
+            
+            <h1 className="text-2xl font-bold tracking-tight mb-2">Mission Accomplished</h1>
+            <p className="text-gray-400 text-sm max-w-xs leading-relaxed mb-8">
+                You have shared your truth for today. <br/> Rest now, return tomorrow.
+            </p>
+
+            <button 
+                onClick={() => router.push('/feed')}
+                className="px-8 py-3 rounded-full bg-white text-black font-bold text-xs tracking-widest hover:scale-105 transition shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+            >
+                RETURN TO FEED
+            </button>
+        </div>
+      )
+  }
+
+  // --- STATE 3: UPLOAD FORM ---
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-white/20 selection:text-white relative overflow-hidden">
-      
-      {/* Background Ambience */}
-      <div className="absolute top-[-20%] right-[-20%] w-[70%] h-[70%] rounded-full bg-purple-900/10 blur-[120px] animate-pulse-slow pointer-events-none"></div>
-      <div className="absolute bottom-[-20%] left-[-20%] w-[70%] h-[70%] rounded-full bg-blue-900/10 blur-[120px] animate-pulse-slow delay-1000 pointer-events-none"></div>
+      <AmbientBackground />
 
       {/* HEADER */}
       <nav className="fixed top-0 w-full border-b border-white/5 bg-[#050505]/80 backdrop-blur-xl px-4 py-4 flex justify-between items-center z-50">
@@ -158,10 +209,20 @@ export default function UploadPage() {
 
       <main className="pt-24 pb-12 px-6 max-w-md mx-auto space-y-10 relative z-10">
         
-        {/* Upload Zone */}
+        {/* Upload Zone & Preview */}
         <div className={`relative aspect-[4/5] rounded-[2.5rem] overflow-hidden flex flex-col items-center justify-center transition-all duration-500 group ${preview ? 'border-0 shadow-[0_0_40px_-10px_rgba(255,255,255,0.2)]' : 'border-2 border-dashed border-white/20 hover:border-white/50 hover:bg-white/5 hover:shadow-[0_0_30px_inset_rgba(255,255,255,0.05)]'}`}>
             {preview ? (
-                <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                <>
+                    <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                    {/* MOOD FILTER OVERLAY */}
+                    {mood && (
+                        <div className={`absolute inset-0 pointer-events-none transition-all duration-500 ${MOOD_OVERLAY_CLASSES[mood]}`}></div>
+                    )}
+                    {/* Change Button */}
+                    <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-bold uppercase tracking-widest text-white/80 pointer-events-none">
+                        {mood || 'Original'}
+                    </div>
+                </>
             ) : (
                 <div className="text-center p-6 space-y-4 group-hover:scale-105 transition duration-300">
                     <div className="w-16 h-16 mx-auto bg-gradient-to-tr from-white/10 to-transparent rounded-full flex items-center justify-center border border-white/10 shadow-lg animate-pulse">
@@ -183,7 +244,7 @@ export default function UploadPage() {
             <div className="text-right text-xs text-gray-600 mt-2 tracking-widest">{caption.length} / 240</div>
         </div>
 
-        {/* Mood */}
+        {/* Mood Selector */}
         <div>
             <label className="text-xs text-gray-500 uppercase tracking-[0.2em] mb-6 block text-center">Select Your Vibe</label>
             <div className="grid grid-cols-3 gap-3">
@@ -204,7 +265,15 @@ export default function UploadPage() {
                 {loading ? <span className="animate-pulse">TRANSMITTING...</span> : <><span>SHARE ONCE</span><span className="text-2xl leading-none group-hover:-rotate-45 transition-transform duration-300">✈️</span></>}
               </span>
           </button>
-          <p className="text-center text-gray-500 text-xs mt-4 uppercase tracking-widest">By sharing, you lock this truth for 24h.</p>
+          
+          {/* Soft Error Message */}
+          {errorMsg && (
+              <p className="text-center text-red-500 text-xs mt-4 uppercase tracking-widest animate-pulse">{errorMsg}</p>
+          )}
+          
+          {!errorMsg && (
+              <p className="text-center text-gray-500 text-xs mt-4 uppercase tracking-widest">By sharing, you lock this truth for 24h.</p>
+          )}
         </div>
 
       </main>
