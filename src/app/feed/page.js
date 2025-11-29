@@ -140,19 +140,20 @@ export default function Feed() {
 
       setUnreadCount(count || 0)
 
-      await checkMyDailyPost(user.id)
-      
-      // LOAD FEED LOGIC (TERPISAH COUNTER & FILTER)
-      await loadFeedLogic(user.id)
+      await Promise.all([
+          checkMyDailyPost(user.id),
+          loadFeedLogic(user.id)
+      ])
     }
 
     init()
   }, [router])
 
   const checkMyDailyPost = async (userId) => {
+    // MENYERTAKAN 'reactions' agar counter di card "Your Truth Today" benar
     const { data } = await supabase
       .from('posts')
-      .select('*')
+      .select('*, reactions(reaction_value)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -169,13 +170,10 @@ export default function Feed() {
   }
 
   const loadFeedLogic = async (userId) => {
-    setLoading(true)
-
-    // A. LOGIC 1: Hitung Limit UI (Hanya Reset Tiap 00:00)
+    // 1. Get Seen Posts for TODAY (Limit UI)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     
-    // Hitung berapa kali lihat post HARI INI
     const { count: todaySeenCount } = await supabase
       .from('seen_posts')
       .select('*', { count: 'exact', head: true })
@@ -185,15 +183,13 @@ export default function Feed() {
     const currentDailyView = todaySeenCount || 0
     setViewCount(currentDailyView)
 
-    // Jika limit hari ini habis, stop fetch
     if (currentDailyView >= DAILY_VIEW_LIMIT) {
       setPosts([])
       setLoading(false)
       return
     }
 
-    // B. LOGIC 2: Filter Konten (Exclude SEMUA post yang pernah dilihat kapanpun)
-    // Ambil semua post_id yang pernah dilihat user ini (tanpa batasan waktu)
+    // 2. Filter Exclude All Time Seen
     const { data: allSeenData } = await supabase
       .from('seen_posts')
       .select('post_id')
@@ -201,7 +197,7 @@ export default function Feed() {
 
     const excludePostIds = allSeenData?.map(item => item.post_id) || []
 
-    // C. LOGIC 3: Fetch Feed (Hanya Post 3 Hari Terakhir agar Fresh)
+    // 3. Fetch Posts (Last 3 Days)
     const threeDaysAgo = new Date()
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
 
@@ -209,11 +205,10 @@ export default function Feed() {
       .from('posts')
       .select(`*, profiles ( username, avatar_url ), reactions ( user_id, reaction_value )`)
       .neq('user_id', userId) 
-      .gte('created_at', threeDaysAgo.toISOString()) // HANYA AMBIL YG BARU
+      .gte('created_at', threeDaysAgo.toISOString()) 
       .order('created_at', { ascending: false })
       .limit(30) 
 
-    // Terapkan filter exclude (NOT IN)
     if (excludePostIds.length > 0) {
       query = query.not('id', 'in', `(${excludePostIds.join(',')})`)
     }
@@ -257,7 +252,73 @@ export default function Feed() {
     }
   }
 
-  // Handle Profile Click
+  // --- REVISED REACTION LOGIC (ANTI-SPAM) ---
+  const handleReaction = async (reactionLabel) => {
+    if (!user) return
+    const currentPost = posts[currentCardIndex]
+    if (!currentPost) return
+
+    const postId = currentPost.id
+
+    // 1. Optimistic Update (UI)
+    const existingReactionIndex = currentPost.reactions.findIndex(r => r.user_id === user.id)
+    const existingReaction = existingReactionIndex !== -1 ? currentPost.reactions[existingReactionIndex] : null
+
+    let newReactions = [...currentPost.reactions]
+    let isRemoving = false
+
+    if (existingReaction && existingReaction.reaction_value === reactionLabel) {
+        newReactions = newReactions.filter(r => r.user_id !== user.id)
+        isRemoving = true
+    } else {
+        if (existingReaction) {
+            newReactions = newReactions.filter(r => r.user_id !== user.id)
+        }
+        newReactions.push({ user_id: user.id, reaction_value: reactionLabel })
+    }
+
+    const updatedPosts = [...posts]
+    updatedPosts[currentCardIndex] = { ...currentPost, reactions: newReactions }
+    setPosts(updatedPosts)
+
+    // 2. Database Sync
+    try {
+        // STEP A: FORCE DELETE NOTIFIKASI LAMA (Gunakan .eq agar spesifik)
+        // Kita lakukan ini DULUAN sebelum insert, agar bersih.
+        if (currentPost.user_id !== user.id) {
+            const { error: delError } = await supabase
+                .from('notifications')
+                .delete()
+                .eq('actor_id', user.id)
+                .eq('post_id', postId)
+            
+            if (delError) console.error("Gagal hapus notif lama (RLS Issue?):", delError)
+        }
+
+        // STEP B: Update Reaction Table
+        // Hapus reaction lama di DB (selalu hapus dulu biar aman)
+        await supabase.from('reactions').delete().match({ user_id: user.id, post_id: postId })
+
+        if (!isRemoving) {
+            // Jika bukan un-react, Insert Reaction Baru
+            await supabase.from('reactions').insert({ user_id: user.id, post_id: postId, reaction_value: reactionLabel })
+            
+            // Insert Notifikasi Baru (Hanya jika bukan post sendiri)
+            if (currentPost.user_id !== user.id) {
+               await supabase.from('notifications').insert({
+                   user_id: currentPost.user_id, // Penerima
+                   actor_id: user.id, // Pelaku
+                   post_id: postId,
+                   type: reactionLabel,
+                   is_read: false
+               })
+            }
+        }
+    } catch (error) {
+        console.error('Reaction/Notification failed:', error)
+    }
+  }
+
   const handleProfileClick = (targetUserId) => {
       if (!targetUserId) return
       if (user && targetUserId === user.id) {
@@ -269,10 +330,8 @@ export default function Feed() {
 
   const post = posts[currentCardIndex]
 
-  // --- HEADER WITH PROGRESS BAR ---
   const Header = () => (
     <nav className="fixed top-0 w-full px-6 py-4 flex justify-between items-center z-50 backdrop-blur-md bg-gradient-to-b from-black/80 to-transparent">
-      {/* KIRI: Logo & Notif */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.push('/notifications')} aria-label="notifications" className="relative group">
           <span className="text-xl group-hover:scale-110 transition block">🔔</span>
@@ -285,11 +344,7 @@ export default function Feed() {
         </button>
         <h1 className="font-black tracking-tighter text-lg">ONCE.</h1>
       </div>
-
-      {/* KANAN: Status Limit & Profile */}
       <div className="flex items-center gap-4">
-        
-        {/* Visual Limit Indicator */}
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center gap-2">
             <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-500">Daily Limit</span>
@@ -297,7 +352,6 @@ export default function Feed() {
               {viewCount}/{DAILY_VIEW_LIMIT}
             </span>
           </div>
-          {/* Progress Bar Line */}
           <div className="w-20 h-1 bg-white/10 rounded-full overflow-hidden">
             <div 
               className={`h-full transition-all duration-500 ease-out ${viewCount >= DAILY_VIEW_LIMIT ? 'bg-red-500' : 'bg-white'}`}
@@ -305,8 +359,6 @@ export default function Feed() {
             ></div>
           </div>
         </div>
-
-        {/* Profile Pic */}
         <button onClick={() => router.push('/profile')} aria-label="profile" className="w-9 h-9 rounded-full bg-gray-800 p-0.5 border border-white/10 overflow-hidden hover:border-white transition">
           <div className="w-full h-full rounded-full overflow-hidden">
             {userAvatar ? <img src={userAvatar} className="w-full h-full object-cover" /> : <span className="flex items-center justify-center h-full w-full text-white text-xs">{user?.email?.[0]?.toUpperCase()}</span>}
@@ -390,7 +442,6 @@ export default function Feed() {
     )
   }
 
-  // USE SKELETON INSTEAD OF TEXT
   if (!user || loading) return <FeedSkeleton />
 
   const isLimitReached = viewCount >= DAILY_VIEW_LIMIT;
@@ -410,25 +461,21 @@ export default function Feed() {
             <p className="text-gray-500 text-sm max-w-xs mx-auto leading-relaxed">You have witnessed 10 truths today. <br/>Return to your reality.</p>
           </div>
           <div className="w-full max-w-xs"><UploadSection /></div>
-          {/* Tagline dipindah ke sini */}
           <div className="text-[10px] uppercase tracking-widest text-gray-500">another life, another day</div>
           <button onClick={() => router.push('/profile')} className="px-8 py-3 rounded-full bg-transparent border border-white/20 hover:bg-white hover:text-black transition-all font-bold text-sm tracking-widest">OPEN MOMENTS</button>
         </main>
       ) : isFeedEmpty ? (
         <main className="h-screen w-full flex flex-col items-center justify-center p-8 text-center relative z-10">
           <div className="w-full max-w-xs mb-8"><UploadSection /></div>
-          
           <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center relative mb-8 shadow-[0_0_30px_rgba(255,255,255,0.15)]">
             <div className="absolute inset-0 bg-white/5 blur-xl rounded-full"></div>
             <div className="absolute inset-0 rounded-full border border-white/5 animate-ping opacity-20"></div>
             <div className="absolute inset-2 rounded-full border border-white/5 animate-ping delay-75 opacity-10"></div>
             <span className="text-2xl opacity-50 relative z-10">📡</span>
           </div>
-
           <p className="text-sm font-bold tracking-widest uppercase text-gray-400">All Caught Up</p>
           <p className="text-xs text-gray-600 mt-2 mb-10 max-w-xs leading-relaxed">The feed is quiet. Time to enjoy the real world.</p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
-            {/* Tagline dipindah ke sini juga (di atas tombol utama) */}
             <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">another life, another day</div>
             <button onClick={() => router.push('/profile')} className="w-full px-6 py-4 rounded-full bg-white text-black font-bold text-xs tracking-[0.2em] hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.4)]">OPEN MOMENTS</button>
             <button onClick={() => window.location.reload()} className="text-[10px] uppercase tracking-widest text-gray-600 hover:text-white transition-colors py-2">Refresh Feed</button>
@@ -437,17 +484,14 @@ export default function Feed() {
       ) : (
         <>
           <main className="min-h-[100dvh] w-full flex flex-col items-center justify-center px-4 pt-28 pb-48 relative z-10 gap-6">
-            
             {hasPostedToday && (
               <div className="w-full max-w-xs animate-in slide-in-from-top-4 fade-in duration-500 z-30">
                 <UploadSection />
               </div>
             )}
-
             <div className="relative w-full max-w-sm aspect-[4/5] bg-[#111] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl shrink-0">
               <img src={post.image_url} className="w-full h-full object-cover" />
               <button onClick={(e) => { e.stopPropagation(); setShowReportModal(true); }} className="absolute top-6 left-4 z-20 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-red-500 hover:bg-black/50 transition border border-white/10" title="Report">⚠️</button>
-
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent flex flex-col justify-end p-6 pointer-events-none">
                 <div className="absolute top-6 left-0 right-4 flex justify-end items-start pointer-events-auto">
                   <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border backdrop-blur-md flex items-center gap-2 ${MOOD_STYLES[post.mood]}`}>
@@ -455,9 +499,7 @@ export default function Feed() {
                     <span>{post.mood}</span>
                   </div>
                 </div>
-
                 <div className="pointer-events-auto">
-                  {/* USER INFO - CLICKABLE */}
                   <div 
                     onClick={(e) => { 
                         e.stopPropagation(); 
@@ -477,34 +519,37 @@ export default function Feed() {
                       <span className="text-[10px] text-gray-500">{timeAgo(post.created_at)}</span>
                     </div>
                   </div>
-
                   <p className="text-sm font-light text-gray-200 leading-relaxed mb-6 drop-shadow-md">{post.caption}</p>
-
+                  
                   <div className="flex gap-2 mb-4">
                     {[{ label: 'Love', emoji: '❤️' }, { label: 'Laugh', emoji: '😂' }, { label: 'Crying', emoji: '😭' }, { label: 'Hug', emoji: '🫂' }].map((reaction) => {
                       const count = (post.reactions || []).filter(r => r.reaction_value === reaction.label).length
                       const isActive = userReaction === reaction.label
                       return (
-                        <button key={reaction.label} onClick={(e) => { e.stopPropagation(); }} className={`flex-1 py-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/5 transition-all active:scale-95 ${isActive ? 'bg-white text-black border-white' : 'hover:bg-white/20'}`}>
+                        <button 
+                            key={reaction.label} 
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                handleReaction(reaction.label); 
+                            }} 
+                            className={`flex-1 py-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/5 transition-all active:scale-95 ${isActive ? 'bg-white text-black border-white' : 'hover:bg-white/20'}`}
+                        >
                           <span className={isActive ? 'scale-125 inline-block' : 'grayscale'}>{reaction.emoji}</span>
                           {count > 0 && <span className="ml-1 text-[10px] font-bold">{count}</span>}
                         </button>
                       )
                     })}
                   </div>
+
                 </div>
               </div>
             </div>
           </main>
-
           <div className="fixed bottom-8 w-full flex justify-center z-50 px-4 pointer-events-none">
             <div className="max-w-sm w-full flex flex-col items-center gap-3 pointer-events-auto">
-              {/* TAGLINE DIHAPUS DARI SINI AGAR TIDAK PADAT */}
-              
               {!hasPostedToday && (
                 <UploadSection />
               )}
-
               <button disabled={processingNext} onClick={handleNextPost} className="w-full bg-gradient-to-r from-white/90 to-white/80 text-black font-black py-4 rounded-full shadow-[0_8px_40px_rgba(255,255,255,0.12)] hover:scale-105 active:scale-95 transition-all duration-300 tracking-widest disabled:opacity-50 disabled:cursor-not-allowed">
                 {processingNext ? '...' : 'NEXT TRUTH →'}
               </button>
